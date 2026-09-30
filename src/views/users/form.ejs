@@ -1,0 +1,9 @@
+<div class="page-head"><div><div class="eyebrow">PEOPLE</div><h1><%= person?'Edit user':'Add user' %></h1><p class="muted">Only administrators can create or change accounts.</p></div><a class="secondary button" href="/users">Back</a></div>
+<section class="card form-card"><form method="post" action="<%= person?'/users/'+person.id+'/edit':'/users/new' %>" class="grid-form"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+<label>Employee code *<input name="employee_code" required value="<%= person?.employee_code||'' %>"></label>
+<label>Name *<input name="name" required value="<%= person?.name||'' %>"></label>
+<label>Email *<input type="email" name="email" required value="<%= person?.email||'' %>"></label>
+<label>Password <input type="password" name="password" <%= person?'placeholder="Leave blank to keep current"':'required' %>></label>
+<label>Department<%= person?.role_name==='Administrator'?'':' *' %><select name="department_id" <%= person?.role_name==='Administrator'?'':'required' %>><option value=""><%= person?.role_name==='Administrator'?'No department':'Select department' %></option><% departments.forEach(d=>{ %><option value="<%= d.id %>" <%= String(person?.department_id||'')===String(d.id)?'selected':'' %>><%= d.name %></option><% }) %></select></label>
+<% if(person){ %><label>Status<select name="status"><option value="ACTIVE" <%= person.status==='ACTIVE'?'selected':'' %>>Active</option><option value="INACTIVE" <%= person.status==='INACTIVE'?'selected':'' %>>Inactive</option></select></label><% } %>
+<div class="span-2 form-actions"><button class="primary">Save user</button><a class="secondary button" href="/users">Cancel</a></div></form></section>

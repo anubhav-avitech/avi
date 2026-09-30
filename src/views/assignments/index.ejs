@@ -1,0 +1,10 @@
+<div class="page-head"><div><div class="eyebrow">CONTROL</div><h1>Assignments</h1><p class="muted">Track who has what and what has been returned.</p></div><% if(user.permissions.includes('ASSIGNMENT_CREATE')){ %><a class="primary button" href="/assignments/new">Assign stock</a><% } %></div>
+<section class="card"><table><thead><tr><th>Item</th><th>Employee</th><th>Department</th><th>Issued</th><th>Quantity</th><th>State</th><th></th></tr></thead><tbody>
+<% if(!rows.length){ %><tr><td colspan="7" class="empty">No assignments yet.</td></tr><% } %>
+<% rows.forEach(r=>{ %><tr>
+<td><strong><%= r.item_name %></strong><small><%= r.asset_code %></small></td>
+<td><strong><%= r.user_name %></strong><small><%= r.employee_code %></small></td>
+<td><%= r.department %></td><td><%= r.assigned_at %></td><td><%= r.quantity %> <%= r.unit %></td>
+<td><% if(r.returned_at){ %><span class="status returned">RETURNED</span><small><%= r.returned_at %></small><% }else{ %><span class="status assigned">ACTIVE</span><% } %></td>
+<td><% if(!r.returned_at&&user.permissions.includes('ASSIGNMENT_RETURN')){ %><form method="post" action="/assignments/<%= r.id %>/return" class="inline-return"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="number" step="0.001" min="0.001" max="<%= r.quantity %>" name="quantity" value="<%= r.quantity %>" required><input name="note" placeholder="Return note"><button class="secondary">Return</button></form><% } %></td>
+</tr><% }) %></tbody></table></section>

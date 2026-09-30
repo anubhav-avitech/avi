@@ -1,0 +1,41 @@
+<div class="page-head">
+  <div><div class="eyebrow">INVENTORY</div><h1><%= item?'Edit inventory':'Add inventory' %></h1><p class="muted">Use ASSET for individually tracked equipment and CONSUMABLE for quantity-based stock.</p></div>
+  <a class="secondary button" href="/inventory">Back</a>
+</div>
+<section class="card form-card">
+  <form method="post" action="<%= action %>" class="grid-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Asset code *<input name="asset_code" required maxlength="80" value="<%= item?.asset_code||'' %>"></label>
+    <label>Name *<input name="name" required maxlength="150" value="<%= item?.name||'' %>"></label>
+    <label>Item type
+      <select name="item_type">
+        <option value="ASSET" <%= item?.item_type==='ASSET'||!item?'selected':'' %>>Asset</option>
+        <option value="CONSUMABLE" <%= item?.item_type==='CONSUMABLE'?'selected':'' %>>Consumable</option>
+      </select>
+    </label>
+    <label>Category<input name="category" value="<%= item?.category||'' %>"></label>
+    <label>Quantity *<input type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
+    <label>Unit *
+      <select name="unit">
+        <% ['Piece','Bottle','Box','Pair','Pack','Kg','Gram','Liter','ml','Kit','Set'].forEach(x=>{ %>
+          <option <%= (item?.unit||'Piece')===x?'selected':'' %>><%= x %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>Department *
+      <select name="department_id" required <%= user.role_scope!=='ALL'?'disabled':'' %>>
+        <% deps.filter(d=>d.status==='ACTIVE').forEach(d=>{ %>
+          <option value="<%= d.id %>" <%= String(item?.department_id||user.department_id)===String(d.id)?'selected':'' %>><%= d.name %></option>
+        <% }) %>
+      </select>
+      <% if(user.role_scope!=='ALL'){ %><input type="hidden" name="department_id" value="<%= user.department_id %>"><% } %>
+    </label>
+    <label>Serial number<input name="serial_number" value="<%= item?.serial_number||'' %>"></label>
+    <label>Location<input name="location" value="<%= item?.location||'' %>" placeholder="e.g. Lab Store / Rack A3"></label>
+    <label>Batch number<input name="batch_number" value="<%= item?.batch_number||'' %>"></label>
+    <label>Manufacturer<input name="manufacturer" value="<%= item?.manufacturer||'' %>"></label>
+    <label>Expiry date<input type="date" name="expiry_date" value="<%= item?.expiry_date||'' %>"></label>
+    <label class="span-2">Description<textarea name="description" rows="3"><%= item?.description||'' %></textarea></label>
+    <div class="span-2 form-actions"><button class="primary">Save inventory</button><a class="secondary button" href="/inventory">Cancel</a></div>
+  </form>
+</section>

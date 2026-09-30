@@ -1,0 +1,22 @@
+<header class="topbar">
+  <a class="brand" href="/"><span class="brand-mark">CI</span><span><b>Avitech</b> Inventory</span></a>
+  <nav>
+    <a class="<%= path==='/'?'active':'' %>" href="/">Overview</a>
+    <% if((user.permissions || []).includes('INVENTORY_VIEW')){ %> 
+      <a class="<%= path.startsWith('/inventory')?'active':'' %>" href="/inventory">Inventory</a>
+      <a class="<%= path.startsWith('/history')?'active':'' %>" href="/history">History</a>
+    <% } %>
+    <% if(user.role_name==='Department User'&&(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN'))){ %>
+      <a class="<%= path.startsWith('/assignments')?'active':'' %>" href="/assignments">Assignments</a>
+    <% } %>
+    <% if(user.role_name==='Administrator'){ %>
+      <% if(user.permissions.includes('USERS_VIEW')){ %><a class="<%= path.startsWith('/users')?'active':'' %>" href="/users">People</a><% } %>
+      <% if(user.permissions.includes('DEPARTMENTS_MANAGE')){ %><a class="<%= path.startsWith('/departments')?'active':'' %>" href="/departments">Departments</a><% } %>
+      <% if(user.permissions.includes('AUDIT_VIEW')){ %><a class="<%= path.startsWith('/audit')?'active':'' %>" href="/audit">Audit</a><% } %>
+    <% } %>
+  </nav>
+  <div class="profile">
+    <span><strong><%= user.name %></strong><small><%= user.role_name %><% if(user.department_name){ %> · <%= user.department_name %><% } %></small></span>
+    <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="ghost">Sign out</button></form>
+  </div>
+</header>

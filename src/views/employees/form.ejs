@@ -1,0 +1,6 @@
+<div class="page-head"><div><div class="eyebrow">PEOPLE</div><h1>Add person</h1></div><a class="secondary button" href="/assignments/new">Back</a></div>
+<section class="card form-card"><form method="post" action="/employees/new" class="grid-form"><input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <label>Employee ID *<input name="employee_code" maxlength="50" required></label>
+  <label>Name *<input name="name" maxlength="150" required></label>
+  <div class="span-2 form-actions"><button class="primary">Add person</button><a class="secondary button" href="/assignments/new">Cancel</a></div>
+</form></section>
