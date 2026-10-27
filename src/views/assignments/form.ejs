@@ -1,1 +1,24 @@
-<div class="page-head"><div><div class="eyebrow">ISSUE STOCK</div><h1>Assign inventory</h1></div><div class="form-actions"><a class="secondary button" href="/employees/new">Add person</a><a class="secondary button" href="/assignments">Back</a></div></div><section class="card form-card"><form method="post" action="/assignments/new" class="stack"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><label>Inventory *<select name="inventory_id" required><option value="">Select inventory</option><% items.forEach(i=>{ %><option value="<%= i.id %>"><%= i.asset_code %> · <%= i.name %> — <%= i.quantity %> <%= i.unit %> · <%= i.department %></option><% }) %></select></label><label>Employee *<select name="employee_id" required><option value="">Select employee</option><% employees.forEach(employee=>{ %><option value="<%= employee.id %>"><%= employee.employee_code %> · <%= employee.name %></option><% }) %></select></label><label>Quantity *<input type="number" step="0.001" min="0.001" name="quantity" value="1" required></label><button class="primary">Confirm assignment</button></form></section>
+<div class="page-head"><div><div class="eyebrow">ISSUE STOCK</div><h1>Assign inventory</h1></div><div class="form-actions"><a class="secondary button" href="/employees/new">Add person</a><a class="secondary button" href="/assignments">Back</a></div></div><section class="card form-card"><form method="post" action="/assignments/new" class="stack"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><label>Inventory *<select id="inventory_id" name="inventory_id" required><option value="">Select inventory</option><% items.forEach(i=>{ %><option value="<%= i.id %>" data-chemical="<%= Boolean(i.chemical_form) %>" data-capacity="<%= i.container_capacity||'' %>" data-capacity-unit="<%= i.container_unit||'' %>" data-balance="<%= i.quantity %>" data-asset-code="<%= i.asset_code %>" data-expiry="<%= i.expiry_date || '' %>" data-batch="<%= i.batch_number || '' %>"><%= i.asset_code %> · <%= i.name %> — <%= i.quantity %> <%= i.unit %><% if(i.chemical_form){ %> × <%= i.container_capacity %> <%= i.container_unit %> · batch <%= i.batch_number %> · expires <%= i.expiry_date %><% } %> · <%= i.department %></option><% }) %></select></label><label>Employee *<select name="employee_id" required><option value="">Select employee</option><% employees.forEach(employee=>{ %><option value="<%= employee.id %>"><%= employee.employee_code %> · <%= employee.name %></option><% }) %></select></label><label>Chemical code<input id="chemical_code" value="" readonly></label><label id="quantity_label">Quantity *<input id="quantity" type="number" step="0.001" min="0.001" name="quantity" value="1" required></label><label>Expiry date on issuing<input id="expiry_on_issue" value="" readonly></label><label>Issued by<input value="<%= user.name %>" readonly></label><p id="chemical_issue_help" class="muted" hidden></p><button class="primary">Confirm issue</button></form></section>
+<script>
+  const itemSelect = document.getElementById('inventory_id');
+  const quantityInput = document.getElementById('quantity');
+  const quantityLabel = document.getElementById('quantity_label');
+  const chemicalHelp = document.getElementById('chemical_issue_help');
+  const chemicalCodeInput = document.getElementById('chemical_code');
+  const expiryOnIssueInput = document.getElementById('expiry_on_issue');
+
+  itemSelect.addEventListener('change', () => {
+    const option = itemSelect.selectedOptions[0];
+    const isChemical = option.dataset.chemical === 'true';
+    quantityInput.step = isChemical ? '1' : '0.001';
+    quantityInput.min = isChemical ? '1' : '0.001';
+    quantityInput.max = option.dataset.balance || '';
+    quantityLabel.firstChild.textContent = isChemical ? 'Quantity issued (containers) *' : 'Quantity *';
+    chemicalCodeInput.value = option.dataset.assetCode || '';
+    expiryOnIssueInput.value = option.dataset.expiry || '';
+    chemicalHelp.hidden = !isChemical;
+    if (isChemical) {
+      chemicalHelp.textContent = `Available: ${option.dataset.balance} containers, batch ${option.dataset.batch}, total ${Number(option.dataset.balance) * Number(option.dataset.capacity)} ${option.dataset.capacityUnit}.`;
+    }
+  });
+</script>

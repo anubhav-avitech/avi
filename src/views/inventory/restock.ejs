@@ -1,0 +1,20 @@
+<div class="page-head">
+  <div><div class="eyebrow">STOCK</div><h1>Add stock</h1><p class="muted"><%= item.name %> · <%= item.asset_code %></p></div>
+  <a class="secondary button" href="/inventory">Back</a>
+</div>
+<section class="card form-card">
+  <p><strong>Current balance:</strong> <%= item.quantity %> <%= item.unit %>
+    <% if(item.chemical_form){ %>
+      (<%= item.quantity * item.container_capacity %> <%= item.container_unit %>;
+      batch <%= item.batch_number %>, expires <%= item.expiry_date %>)
+    <% } %>
+  </p>
+  <form method="post" action="<%= action %>" class="stack">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Quantity to add *<input type="number" step="<%= item.chemical_form?'1':'0.001' %>" min="<%= item.chemical_form?'1':'0.001' %>" name="quantity" required></label>
+    <p class="muted"><%= item.chemical_form
+      ? `Enter complete ${item.container_capacity} ${item.container_unit} containers. The batch and expiry details remain unchanged.`
+      : 'Added quantity will be recorded in the stock history.' %></p>
+    <button class="primary">Add quantity</button>
+  </form>
+</section>

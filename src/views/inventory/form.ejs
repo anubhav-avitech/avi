@@ -1,22 +1,58 @@
 <div class="page-head">
-  <div><div class="eyebrow">INVENTORY</div><h1><%= item?'Edit inventory':'Add inventory' %></h1><p class="muted">Use ASSET for individually tracked equipment and CONSUMABLE for quantity-based stock.</p></div>
+  <div><div class="eyebrow">INVENTORY</div><h1><%= item?'Edit inventory':'Add inventory' %></h1><p class="muted">Track laboratory chemicals by batch and container size, or add regular inventory.</p></div>
   <a class="secondary button" href="/inventory">Back</a>
 </div>
 <section class="card form-card">
   <form method="post" action="<%= action %>" class="grid-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label>Asset code *<input name="asset_code" required maxlength="80" value="<%= item?.asset_code||'' %>"></label>
     <label>Name *<input name="name" required maxlength="150" value="<%= item?.name||'' %>"></label>
     <label>Item type
-      <select name="item_type">
+      <select id="item_type" name="item_type">
         <option value="ASSET" <%= item?.item_type==='ASSET'||!item?'selected':'' %>>Asset</option>
         <option value="CONSUMABLE" <%= item?.item_type==='CONSUMABLE'?'selected':'' %>>Consumable</option>
       </select>
     </label>
-    <label>Category<input name="category" value="<%= item?.category||'' %>"></label>
-    <label>Quantity *<input type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
+    <label>Chemical type
+      <select id="chemical_form" name="chemical_form" <%= item?.chemical_form?'disabled':'' %>>
+        <option value="">Not a chemical</option>
+        <option value="LIQUID" <%= item?.chemical_form==='LIQUID'?'selected':'' %>>Liquid</option>
+        <option value="POWDER" <%= item?.chemical_form==='POWDER'?'selected':'' %>>Powder</option>
+      </select>
+      <% if(item?.chemical_form){ %><input type="hidden" name="chemical_form" value="<%= item.chemical_form %>"><% } %>
+    </label>
+    <% if(!item&&batches.length){ %>
+      <label class="span-2">Reuse a saved chemical batch
+        <select id="saved_batch">
+          <option value="">Enter a new batch</option>
+          <% batches.forEach(batch=>{ %>
+            <option
+              data-name="<%= batch.name %>"
+              data-form="<%= batch.chemical_form %>"
+              data-batch="<%= batch.batch_number %>"
+              data-manufacturer="<%= batch.manufacturer||'' %>"
+              data-expiry="<%= batch.expiry_date||'' %>">
+              <%= batch.name %> · <%= batch.batch_number %> · <%= batch.expiry_date||'No expiry' %>
+            </option>
+          <% }) %>
+        </select>
+      </label>
+    <% } %>
+    <div id="chemical_fields" class="span-2 grid-form" <%= item?.chemical_form?'':'hidden' %>>
+      <label>Container capacity *
+        <input type="number" step="0.001" min="0.001" name="container_capacity" value="<%= item?.container_capacity||'' %>">
+      </label>
+      <label>Capacity unit *
+        <select name="container_unit">
+          <% ['ml','L','g','kg'].forEach(x=>{ %>
+            <option value="<%= x %>" <%= (item?.container_unit||'ml')===x?'selected':'' %>><%= x %></option>
+          <% }) %>
+        </select>
+      </label>
+      <p class="span-2 muted">Each stock line represents one batch and one container size. Add another line to track a different size from the same batch.</p>
+    </div>
+    <label>Qty received from vendor *<input id="quantity" type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
     <label>Unit *
-      <select name="unit">
+      <select id="unit" name="unit">
         <% ['Piece','Bottle','Box','Pair','Pack','Kg','Gram','Liter','ml','Kit','Set'].forEach(x=>{ %>
           <option <%= (item?.unit||'Piece')===x?'selected':'' %>><%= x %></option>
         <% }) %>
@@ -30,12 +66,81 @@
       </select>
       <% if(user.role_scope!=='ALL'){ %><input type="hidden" name="department_id" value="<%= user.department_id %>"><% } %>
     </label>
+    <label>Vendor name<input id="vendor_name" name="vendor_name" value="<%= item?.vendor_name||'' %>"></label>
+    <label>Bill no.<input id="vendor_bill_no" name="vendor_bill_no" value="<%= item?.vendor_bill_no||'' %>"></label>
+    <label>Make / Grade<input id="make_grade" name="make_grade" value="<%= item?.make_grade||'' %>"></label>
+    <label>Received by<input id="received_by" name="received_by" value="<%= item?.received_by||'' %>"></label>
+    <label>Date of receiving<input id="received_date" type="date" name="received_date" value="<%= item?.received_date||'' %>"></label>
     <label>Serial number<input name="serial_number" value="<%= item?.serial_number||'' %>"></label>
     <label>Location<input name="location" value="<%= item?.location||'' %>" placeholder="e.g. Lab Store / Rack A3"></label>
-    <label>Batch number<input name="batch_number" value="<%= item?.batch_number||'' %>"></label>
-    <label>Manufacturer<input name="manufacturer" value="<%= item?.manufacturer||'' %>"></label>
-    <label>Expiry date<input type="date" name="expiry_date" value="<%= item?.expiry_date||'' %>"></label>
+    <label>Batch number<input id="batch_number" name="batch_number" value="<%= item?.batch_number||'' %>"></label>
+    <label>Mfg.<input id="manufacturer" name="manufacturer" value="<%= item?.manufacturer||'' %>"></label>
+    <label>Expiry date<input id="expiry_date" type="date" name="expiry_date" value="<%= item?.expiry_date||'' %>"></label>
     <label class="span-2">Description<textarea name="description" rows="3"><%= item?.description||'' %></textarea></label>
     <div class="span-2 form-actions"><button class="primary">Save inventory</button><a class="secondary button" href="/inventory">Cancel</a></div>
   </form>
 </section>
+<script>
+  const chemicalForm = document.getElementById('chemical_form');
+  const chemicalFields = document.getElementById('chemical_fields');
+  const itemType = document.getElementById('item_type');
+  const unit = document.getElementById('unit');
+  const capacityUnit = document.querySelector('[name="container_unit"]');
+  const quantity = document.getElementById('quantity');
+
+  function updateChemicalFields() {
+    const isChemical = Boolean(chemicalForm.value);
+    chemicalFields.hidden = !isChemical;
+    document.querySelector('[name="container_capacity"]').required = isChemical;
+    capacityUnit.required = isChemical;
+    document.getElementById('batch_number').required = isChemical;
+    document.getElementById('expiry_date').required = isChemical;
+    if (isChemical) {
+      itemType.value = 'CONSUMABLE';
+      unit.value = 'Bottle';
+      const validUnits = chemicalForm.value === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
+      if (!validUnits.includes(capacityUnit.value)) {
+        capacityUnit.value = chemicalForm.value === 'LIQUID' ? 'ml' : 'g';
+      }
+    }
+    if (!quantity.readOnly) {
+      quantity.step = isChemical ? '1' : '0.001';
+      quantity.min = isChemical ? '1' : '0.001';
+    }
+    Array.from(capacityUnit.options).forEach(option => {
+      option.hidden = isChemical && (chemicalForm.value === 'LIQUID'
+        ? !['ml', 'L'].includes(option.value)
+        : !['g', 'kg'].includes(option.value));
+    });
+  }
+
+  chemicalForm.addEventListener('change', updateChemicalFields);
+  const savedBatch = document.getElementById('saved_batch');
+  if (savedBatch) {
+    const chemicalName = document.querySelector('[name="name"]');
+    const batchNumber = document.getElementById('batch_number');
+    const manufacturer = document.getElementById('manufacturer');
+    const expiryDate = document.getElementById('expiry_date');
+    savedBatch.addEventListener('change', () => {
+      const option = savedBatch.selectedOptions[0];
+      const reuseBatch = Boolean(option.dataset.batch);
+      [chemicalName, batchNumber, manufacturer, expiryDate].forEach(input => {
+        input.readOnly = reuseBatch;
+      });
+      if (!reuseBatch) {
+        chemicalName.value = '';
+        batchNumber.value = '';
+        manufacturer.value = '';
+        expiryDate.value = '';
+        return;
+      }
+      chemicalName.value = option.dataset.name;
+      chemicalForm.value = option.dataset.form;
+      batchNumber.value = option.dataset.batch;
+      manufacturer.value = option.dataset.manufacturer;
+      expiryDate.value = option.dataset.expiry;
+      updateChemicalFields();
+    });
+  }
+  updateChemicalFields();
+</script>

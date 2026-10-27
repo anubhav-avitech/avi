@@ -10,16 +10,18 @@ There are exactly two application scopes:
 - Company-wide access.
 - Manage every department's inventory.
 - Edit and retire inventory; adding items is reserved for Department Users.
-- Manage inventory across departments, but cannot assign or return items.
+- Manage inventory across departments, but cannot issue items.
+- View assignment history and process returns; chemical returns require an explanatory note.
 - View inventory history and audit logs.
-- Create, edit and deactivate users.
+- Create, edit and permanently delete users. Deleting an account removes its login and personal details; assignment, transaction and audit history remains, with user references cleared.
 - Manage departments.
 - No department restriction.
 
 ### Department User
 - Belongs to exactly one department.
 - Can view, add and retire inventory only in that department.
-- Can assign and return items only within that department.
+- Can issue inventory only within that department.
+- Can return non-chemical inventory in that department; chemical issues are treated as consumed and cannot be returned by Department Users.
 - Can add non-login employee records using only employee ID and name, then assign department inventory to them.
 - Can view inventory history only for that department.
 - Cannot access another department's inventory, users, departments or audit logs.
@@ -49,7 +51,42 @@ The application also uses:
 
 `CONSUMABLE` is intended for quantity-based stock such as chemicals, gloves, masks and stationery. Units include Piece, Bottle, Box, Pair, Pack, Kg, Gram, Liter, ml, Kit and Set.
 
-For laboratory chemicals, batch number, manufacturer, expiry date and storage location can be recorded. Example: assigning 3 bottles reduces available stock by 3; returning 3 bottles restores the stock and records the transaction.
+### Chemical receiving and issuing register fields
+
+The lab workflow follows a vendor receiving register and a stock issue register. For chemical stock, the application now captures the receiving details that were previously written manually in the register:
+
+- Sr. no. / internal record ID (generated automatically; no manual stock-code entry)
+- Date of receiving
+- Vendor name
+- Bill no.
+- Make / grade
+- Batch no.
+- Quantity received from vendor
+- Received by
+- Mfg.
+
+The issue tracking keeps the operational information from the issue register:
+
+- Chemical code
+- Expiry date on issuing
+- Quantity issued
+- Issued by
+- Issued to
+- Batch no.
+- Issued date
+- Expiry date after receiving
+- Balance left after issuing
+
+### Laboratory chemicals
+
+- Record chemicals as **Liquid** or **Powder** and track each batch and container size as its own stock line.
+- Liquid containers use ml or L; powder containers use g or kg. Stock and issue quantities are whole bottles/containers, with the equivalent volume or weight shown alongside.
+- Batch number, expiry date, manufacturer and storage location are recorded. When adding another stock line, select a saved batch to reuse its name, batch number, manufacturer and expiry date without retyping them.
+- Add the received quantity in one entry or add more to the same batch/container line later. A different container size uses another line with the same saved batch.
+- After any stock from a chemical line is issued, its batch, expiry and package-size details are locked to preserve issue/return traceability.
+- Issuing containers automatically deducts them from the balance. Each issue records who issued it, who received it, when, its batch/expiry/package details and the balance afterwards.
+- Department Users cannot return chemicals. Administrators can record exceptional chemical returns, with a required reason; the return updates stock and is recorded in history.
+- Expiry dates and batches are visible in inventory and issue records for traceability.
 
 ## Setup
 
@@ -83,6 +120,18 @@ For an existing installation, back up the database and apply the role-permission
 
 ```bash
 mysql -u root -p < database/migrate-two-scope.sql
+```
+
+To add chemical type and container-size tracking and enable administrator return access, run:
+
+```bash
+mysql -u root -p < database/migrate-lab-chemicals.sql
+```
+
+To allow permanent user deletion while keeping and unlinking old assignment and transaction records, run:
+
+```bash
+mysql -u root -p < database/migrate-user-hard-delete.sql
 ```
 
 To add non-login department employees as assignment recipients, run this one-time migration on an existing installation:

@@ -6,7 +6,7 @@
       <a class="<%= path.startsWith('/inventory')?'active':'' %>" href="/inventory">Inventory</a>
       <a class="<%= path.startsWith('/history')?'active':'' %>" href="/history">History</a>
     <% } %>
-    <% if(user.role_name==='Department User'&&(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN'))){ %>
+    <% if((user.role_name==='Department User'||user.role_name==='Administrator')&&(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN'))){ %>
       <a class="<%= path.startsWith('/assignments')?'active':'' %>" href="/assignments">Assignments</a>
     <% } %>
     <% if(user.role_name==='Administrator'){ %>

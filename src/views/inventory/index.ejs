@@ -1,5 +1,61 @@
-<div class="page-head"><div><div class="eyebrow">STOCK</div><h1>Inventory</h1><p class="muted"><%= user.role_name==='Administrator'?'Company-wide inventory.':'Inventory for your department only.' %></p></div><% if(user.role_name==='Department User'&&user.permissions.includes('INVENTORY_CREATE')){ %><a class="primary button" href="/inventory/new">Add item</a><% } %></div>
-<form class="toolbar" method="get"><input name="q" value="<%= query %>" placeholder="Search asset, name, category or serial…"><% if(user.role_scope==='ALL'){ %><select name="department_id"><option value="">All departments</option><% deps.filter(d=>d.status==='ACTIVE').forEach(d=>{ %><option value="<%= d.id %>" <%= String(selected)===String(d.id)?'selected':'' %>><%= d.name %></option><% }) %></select><% } %><button class="secondary">Search</button></form>
-<section class="card"><table><thead><tr><th>Item</th><th>Type</th><th>Department</th><th>Stock</th><th>Status</th><th></th></tr></thead><tbody>
-<% if(!items.length){ %><tr><td colspan="6" class="empty">No inventory found.</td></tr><% } %>
-<% items.forEach(i=>{ %><tr><td><strong><%= i.name %></strong><small><%= i.asset_code %><% if(i.serial_number){ %> · <%= i.serial_number %><% } %></small></td><td><span class="tag"><%= i.item_type %></span></td><td><%= i.department %></td><td><strong><%= i.quantity %></strong> <%= i.unit %></td><td><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td><td class="actions"><a href="/inventory/<%= i.id %>/history">History</a><% if(user.permissions.includes('INVENTORY_UPDATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/edit">Edit</a><% } %><% if(user.permissions.includes('INVENTORY_DELETE')&&i.status!=='RETIRED'){ %><form method="post" action="/inventory/<%= i.id %>/retire"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Retire</button></form><% } %></td></tr><% }) %></tbody></table></section>
+<div class="page-head">
+  <div>
+    <div class="eyebrow">STOCK</div>
+    <h1>Inventory</h1>
+    <p class="muted"><%= user.role_name==='Administrator'?'Company-wide inventory.':'Inventory for your department only.' %></p>
+  </div>
+  <% if(user.role_name==='Department User'&&user.permissions.includes('INVENTORY_CREATE')){ %>
+    <a class="primary button" href="/inventory/new">Add item</a>
+  <% } %>
+</div>
+<form class="toolbar" method="get">
+  <input name="q" value="<%= query %>" placeholder="Search stock, batch, vendor or name…">
+  <% if(user.role_scope==='ALL'){ %>
+    <select name="department_id">
+      <option value="">All departments</option>
+      <% deps.filter(d=>d.status==='ACTIVE').forEach(d=>{ %>
+        <option value="<%= d.id %>" <%= String(selected)===String(d.id)?'selected':'' %>><%= d.name %></option>
+      <% }) %>
+    </select>
+  <% } %>
+  <button class="secondary">Search</button>
+</form>
+<section class="card">
+  <table>
+    <thead><tr><th>Item</th><th>Type</th><th>Department</th><th>Stock balance</th><th>Status</th><th></th></tr></thead>
+    <tbody>
+      <% if(!items.length){ %><tr><td colspan="6" class="empty">No inventory found.</td></tr><% } %>
+      <% items.forEach(i=>{ %>
+        <% const today=new Date(); today.setHours(0,0,0,0); const daysToExpiry=i.expiry_date?Math.ceil((new Date(`${i.expiry_date}T00:00:00`)-today)/86400000):null; %>
+        <tr>
+          <td>
+            <strong><%= i.name %></strong>
+            <small>
+              <%= i.asset_code %><% if(i.serial_number){ %> · <%= i.serial_number %><% } %>
+              <% if(i.chemical_form){ %> · <%= i.chemical_form.toLowerCase() %> · batch <%= i.batch_number %> · expiry <%= i.expiry_date %><% } %>
+            </small>
+            <% if(i.chemical_form){ %>
+              <small>Vendor: <%= i.vendor_name || '—' %> · Bill: <%= i.vendor_bill_no || '—' %> · Make / Grade: <%= i.make_grade || '—' %> · Mfg: <%= i.manufacturer || '—' %> · Received: <%= i.received_date || '—' %> · By: <%= i.received_by || '—' %></small>
+            <% } %>
+            <% if(i.chemical_form&&daysToExpiry<0){ %><span class="tag">EXPIRED</span><% }else if(i.chemical_form&&daysToExpiry<=30){ %><span class="tag">EXPIRING IN <%= daysToExpiry %> DAYS</span><% } %>
+          </td>
+          <td><span class="tag"><%= i.chemical_form?'CHEMICAL':i.item_type %></span></td>
+          <td><%= i.department %></td>
+          <td>
+            <strong><%= i.quantity %> <%= i.unit %></strong>
+            <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> each · balance <%= i.quantity*i.container_capacity %> <%= i.container_unit %></small><% } %>
+          </td>
+          <td><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td>
+          <td class="actions">
+            <a href="/inventory/<%= i.id %>/history">History</a>
+            <% if(user.permissions.includes('INVENTORY_CREATE')&&user.role_name==='Department User'&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/restock">Add stock</a><% } %>
+            <% if(user.permissions.includes('INVENTORY_UPDATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/edit">Edit</a><% } %>
+            <% if(user.permissions.includes('INVENTORY_DELETE')&&i.status!=='RETIRED'){ %>
+              <form method="post" action="/inventory/<%= i.id %>/retire"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Retire</button></form>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>

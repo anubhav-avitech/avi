@@ -99,4 +99,50 @@ async function update(id, data, actor) {
   }, actor.ip);
 }
 
-module.exports = { list, options, create, update };
+async function remove(id, actor) {
+  const targetId = Number(id);
+  if (!Number.isInteger(targetId) || targetId <= 0) throw new Error('NOT_FOUND');
+  if (targetId === Number(actor.id)) throw new Error('CANNOT_DELETE_SELF');
+
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+
+    const [targets] = await conn.query(`
+      SELECT u.id,u.name,u.email,u.status,r.name AS role_name
+      FROM users u
+      JOIN roles r ON r.id=u.role_id
+      WHERE u.id=?
+      FOR UPDATE
+    `, [targetId]);
+    if (!targets.length) throw new Error('NOT_FOUND');
+    const target = targets[0];
+
+    if (target.role_name === 'Administrator' && target.status === 'ACTIVE') {
+      const [admins] = await conn.query(`
+        SELECT u.id
+        FROM users u
+        JOIN roles r ON r.id=u.role_id
+        WHERE r.name='Administrator' AND u.status='ACTIVE'
+        FOR UPDATE
+      `);
+      if (admins.length <= 1) throw new Error('LAST_ACTIVE_ADMIN');
+    }
+
+    await conn.query(`
+      INSERT INTO audit_logs(actor_id,action,entity_type,entity_id,details,ip_address)
+      VALUES(?,'USER_DELETED','users',NULL,JSON_OBJECT('history_unlinked',true),?)
+    `, [actor.id, actor.ip || null]);
+    await conn.query('DELETE FROM users WHERE id=?', [targetId]);
+
+    await conn.commit();
+    return 'deleted';
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
+}
+
+module.exports = { list, options, create, update, remove };

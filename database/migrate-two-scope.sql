@@ -32,7 +32,7 @@ FROM role_permissions rp
 JOIN roles r ON r.id=rp.role_id
 JOIN permissions p ON p.id=rp.permission_id
 WHERE r.name='Administrator'
-  AND p.code IN ('INVENTORY_CREATE','ASSIGNMENT_CREATE','ASSIGNMENT_RETURN');
+  AND p.code IN ('INVENTORY_CREATE','ASSIGNMENT_CREATE');
 
 INSERT IGNORE INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id

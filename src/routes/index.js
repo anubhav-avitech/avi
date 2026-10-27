@@ -98,6 +98,7 @@ router.get('/inventory/new', requireAuth, requireDepartmentUser, requirePermissi
       title: 'Add inventory',
       item: null,
       deps,
+      batches: await inventory.chemicalBatches(req.session.user.department_id),
       action: '/inventory/new'
     });
   } catch (error) {
@@ -122,6 +123,51 @@ router.post('/inventory/new', requireAuth, requireDepartmentUser, requirePermiss
       setFlash(req, 'Quantity must be greater than zero.', 'error');
       return res.redirect('/inventory/new');
     }
+    if (error.message === 'INVALID_CHEMICAL') {
+      setFlash(req, 'Enter a batch number, expiry date, valid container capacity and matching unit.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    next(error);
+  }
+});
+
+router.get('/inventory/:id/restock', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
+  try {
+    const item = await inventory.get(req.params.id);
+    if (!item || !inventory.canAccess(req.session.user, item)) {
+      return res.status(403).render('errors/403', { title: 'Access denied' });
+    }
+    res.render('inventory/restock', {
+      title: 'Add stock',
+      item,
+      action: `/inventory/${item.id}/restock`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/inventory/:id/restock', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
+  try {
+    await inventory.restock(req.params.id, req.body.quantity, req.session.user);
+    setFlash(req, 'Stock quantity added.');
+    res.redirect('/inventory');
+  } catch (error) {
+    if (error.message === 'INVALID_QUANTITY') {
+      setFlash(req, 'Enter a valid quantity. Chemical stock must be entered as whole containers.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/restock`);
+    }
+    if (error.message === 'RETIRED_ITEM') {
+      setFlash(req, 'Retired stock cannot be increased.', 'error');
+      return res.redirect('/inventory');
+    }
+    if (error.message === 'STOCK_NOT_AVAILABLE') {
+      setFlash(req, 'Stock cannot be increased while the item is in maintenance, lost or damaged status.', 'error');
+      return res.redirect('/inventory');
+    }
+    if (error.message === 'FORBIDDEN') {
+      return res.status(403).render('errors/403', { title: 'Access denied' });
+    }
     next(error);
   }
 });
@@ -141,6 +187,7 @@ router.get('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPDA
       title: 'Edit inventory',
       item,
       deps,
+      batches: [],
       action: `/inventory/${item.id}/edit`
     });
   } catch (error) {
@@ -158,6 +205,18 @@ router.post('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPD
     if (error.message === 'RETIRED_ITEM') {
       setFlash(req, 'Retired inventory cannot be edited.', 'error');
       return res.redirect('/inventory');
+    }
+    if (error.message === 'INVALID_CHEMICAL') {
+      setFlash(req, 'Enter a valid batch number, expiry date, container capacity and matching unit.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'CHEMICAL_TYPE_IMMUTABLE') {
+      setFlash(req, 'An inventory record cannot be changed between chemical and non-chemical stock.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'CHEMICAL_STOCK_METADATA_LOCKED') {
+      setFlash(req, 'Chemical name, batch, expiry and container details cannot be changed after stock has been issued. Add a new stock line for a different batch or size.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
     }
     if (error.code === 'ER_DUP_ENTRY') {
       setFlash(req, 'Asset code or serial number already exists.', 'error');
@@ -209,9 +268,10 @@ router.get('/history', requireAuth, requirePermission('INVENTORY_VIEW'), async (
   }
 });
 
-router.get('/assignments', requireAuth, requireDepartmentUser, async (req, res, next) => {
+router.get('/assignments', requireAuth, async (req, res, next) => {
   try {
-    if (!req.session.user.permissions.includes('ASSIGNMENT_CREATE') && !req.session.user.permissions.includes('ASSIGNMENT_RETURN')) {
+    if (!['Administrator', 'Department User'].includes(req.session.user.role_name) ||
+        (!req.session.user.permissions.includes('ASSIGNMENT_CREATE') && !req.session.user.permissions.includes('ASSIGNMENT_RETURN'))) {
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
     res.render('assignments/index', {
@@ -272,14 +332,14 @@ router.post('/assignments/new', requireAuth, requireDepartmentUser, requirePermi
       CROSS_DEPARTMENT: 'Inventory can only be assigned within the same department.',
       INSUFFICIENT: 'Not enough available quantity.',
       NOT_FOUND: 'Inventory item not found.',
-      INVALID_QUANTITY: 'Quantity must be greater than zero.'
+      INVALID_QUANTITY: 'Enter a valid quantity. Chemical stock must be issued as whole containers.'
     };
     setFlash(req, messages[error.message] || 'Assignment could not be completed.', 'error');
     res.redirect('/assignments/new');
   }
 });
 
-router.post('/assignments/:id/return', requireAuth, requireDepartmentUser, requirePermission('ASSIGNMENT_RETURN'), async (req, res, next) => {
+router.post('/assignments/:id/return', requireAuth, requirePermission('ASSIGNMENT_RETURN'), async (req, res, next) => {
   try {
     await inventory.returnAssignment(req.params.id, req.body.quantity, req.body.note, req.session.user);
     setFlash(req, 'Return recorded.');
@@ -289,6 +349,9 @@ router.post('/assignments/:id/return', requireAuth, requireDepartmentUser, requi
       FORBIDDEN: 'You cannot access this assignment.',
       INVALID_RETURN: 'Return quantity is invalid.',
       INVALID_QUANTITY: 'Quantity must be greater than zero.',
+      CHEMICAL_RETURN_ADMIN_ONLY: 'Only administrators can record chemical returns.',
+      CHEMICAL_RETURN_NOTE_REQUIRED: 'Enter a note explaining this exceptional chemical return.',
+      INVALID_RETURN_NOTE: 'Return note must be 500 characters or fewer.',
       NOT_FOUND: 'Assignment is no longer active.'
     };
     setFlash(req, messages[error.message] || 'Return could not be completed.', 'error');
@@ -368,6 +431,25 @@ router.post('/users/:id/edit', requireAuth, requireAdmin, requirePermission('USE
     if (error.message === 'DEPARTMENT_REQUIRED') {
       setFlash(req, 'Department is required for a Department User.', 'error');
       return res.redirect(`/users/${req.params.id}/edit`);
+    }
+    next(error);
+  }
+});
+
+router.post('/users/:id/delete', requireAuth, requireAdmin, requirePermission('USERS_MANAGE'), async (req, res, next) => {
+  try {
+    await users.remove(req.params.id, req.session.user);
+    setFlash(req, 'User permanently deleted. Existing activity history has been kept without linking it to the deleted account.');
+    res.redirect('/users');
+  } catch (error) {
+    const messages = {
+      NOT_FOUND: 'User not found.',
+      CANNOT_DELETE_SELF: 'You cannot delete your own account.',
+      LAST_ACTIVE_ADMIN: 'The last active administrator cannot be deleted.'
+    };
+    if (messages[error.message]) {
+      setFlash(req, messages[error.message], 'error');
+      return res.redirect('/users');
     }
     next(error);
   }

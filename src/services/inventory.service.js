@@ -1,5 +1,6 @@
 const db = require('../config/db');
 const { audit } = require('./audit.service');
+const { randomUUID } = require('crypto');
 
 function isAdmin(user) {
   return user.role_name === 'Administrator' && user.role_scope === 'ALL';
@@ -11,7 +12,52 @@ function isDepartmentUser(user) {
 
 function normalizeQuantity(value) {
   const quantity = Number(value);
-  if (!Number.isFinite(quantity) || quantity <= 0) throw new Error('INVALID_QUANTITY');
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 999999999.999) {
+    throw new Error('INVALID_QUANTITY');
+  }
+  return quantity;
+}
+
+function chemicalDetails(data) {
+  const form = String(data.chemical_form || '').toUpperCase();
+  if (!form) return null;
+  if (!['LIQUID', 'POWDER'].includes(form)) throw new Error('INVALID_CHEMICAL');
+
+  const rawCapacity = String(data.container_capacity || '');
+  if (!/^\d+(?:\.\d{1,3})?$/.test(rawCapacity)) throw new Error('INVALID_CHEMICAL');
+  const capacity = normalizeQuantity(rawCapacity);
+  const unit = String(data.container_unit || '');
+  const validUnits = form === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
+  const chemicalName = String(data.name || '').trim();
+  const batchNumber = String(data.batch_number || '').trim();
+  const expiryDate = String(data.expiry_date || '');
+  const parsedExpiry = new Date(`${expiryDate}T00:00:00Z`);
+  if (
+    !validUnits.includes(unit) ||
+    !chemicalName ||
+    chemicalName.length > 150 ||
+    !batchNumber ||
+    batchNumber.length > 100 ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(expiryDate) ||
+    expiryDate < '1000-01-01' ||
+    Number.isNaN(parsedExpiry.getTime()) ||
+    parsedExpiry.toISOString().slice(0, 10) !== expiryDate
+  ) {
+    throw new Error('INVALID_CHEMICAL');
+  }
+
+  return {
+    form,
+    capacity,
+    unit,
+    batchNumber,
+    expiryDate
+  };
+}
+
+function normalizeStockQuantity(value, chemical) {
+  const quantity = normalizeQuantity(value);
+  if (chemical && !Number.isInteger(quantity)) throw new Error('INVALID_QUANTITY');
   return quantity;
 }
 
@@ -33,9 +79,9 @@ async function list(user, search, departmentId) {
   }
 
   if (search) {
-    sql += ' AND (i.asset_code LIKE ? OR i.name LIKE ? OR i.category LIKE ? OR i.serial_number LIKE ?)';
+    sql += ' AND (i.asset_code LIKE ? OR i.name LIKE ? OR i.category LIKE ? OR i.serial_number LIKE ? OR i.batch_number LIKE ?)';
     const term = `%${String(search).trim()}%`;
-    params.push(term, term, term, term);
+    params.push(term, term, term, term, term);
   }
 
   sql += ' ORDER BY i.updated_at DESC';
@@ -51,6 +97,16 @@ async function get(id) {
     WHERE i.id=?
   `, [id]);
   return rows[0] || null;
+}
+
+async function chemicalBatches(departmentId) {
+  const [rows] = await db.query(`
+    SELECT DISTINCT name,chemical_form,batch_number,manufacturer,expiry_date
+    FROM inventory_items
+    WHERE department_id=? AND chemical_form IS NOT NULL AND batch_number IS NOT NULL
+    ORDER BY name,batch_number
+  `, [departmentId]);
+  return rows;
 }
 
 function canAccess(user, item) {
@@ -73,39 +129,113 @@ function departmentForWrite(user, requestedDepartment) {
 async function create(data, user) {
   if (!isDepartmentUser(user)) throw new Error('FORBIDDEN');
   const departmentId = departmentForWrite(user, data.department_id);
-  const quantity = normalizeQuantity(data.quantity);
-  const itemType = data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
+  const chemical = chemicalDetails(data);
+  const quantity = normalizeStockQuantity(data.quantity, chemical);
+  const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
+  const assetCode = `${chemical ? 'CHEM' : 'STK'}-${randomUUID().toUpperCase()}`;
+
+  const receivedDate = String(data.received_date || '').trim();
+  const vendorName = String(data.vendor_name || '').trim();
+  const vendorBillNo = String(data.vendor_bill_no || '').trim();
+  const makeGrade = String(data.make_grade || '').trim();
+  const receivedBy = String(data.received_by || '').trim();
 
   const [result] = await db.query(`
     INSERT INTO inventory_items(
       asset_code,name,item_type,category,description,serial_number,
-      quantity,unit,department_id,status,location,batch_number,manufacturer,expiry_date
-    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      quantity,unit,department_id,status,location,batch_number,manufacturer,
+      vendor_name,vendor_bill_no,make_grade,received_by,received_date,expiry_date,
+      chemical_form,container_capacity,container_unit
+    ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `, [
-    String(data.asset_code || '').trim(),
+    assetCode,
     String(data.name || '').trim(),
     itemType,
     data.category || null,
     data.description || null,
     data.serial_number || null,
     quantity,
-    data.unit || 'Piece',
+    chemical ? 'Bottle' : data.unit || 'Piece',
     departmentId,
     'AVAILABLE',
     data.location || null,
-    data.batch_number || null,
+    chemical ? chemical.batchNumber : data.batch_number || null,
     data.manufacturer || null,
-    data.expiry_date || null
+    vendorName || null,
+    vendorBillNo || null,
+    makeGrade || null,
+    receivedBy || null,
+    receivedDate || null,
+    chemical ? chemical.expiryDate : data.expiry_date || null,
+    chemical?.form || null,
+    chemical?.capacity || null,
+    chemical?.unit || null
   ]);
 
   await db.query(
     'INSERT INTO inventory_transactions(inventory_id,actor_id,action,quantity,unit,details) VALUES(?,?,?,?,?,?)',
-    [result.insertId, user.id, 'ADD', quantity, data.unit || 'Piece', JSON.stringify({ asset_code: data.asset_code })]
+    [result.insertId, user.id, 'ADD', quantity, chemical ? 'Bottle' : data.unit || 'Piece', JSON.stringify({
+      asset_code: assetCode,
+      chemical_form: chemical?.form || null,
+      batch_number: chemical?.batchNumber || data.batch_number || null,
+      expiry_date: chemical?.expiryDate || data.expiry_date || null,
+      container_capacity: chemical?.capacity || null,
+      container_unit: chemical?.unit || null,
+      balance_after: quantity
+    })]
   );
   await audit(user.id, 'INVENTORY_CREATED', 'inventory_items', result.insertId, {
-    asset_code: data.asset_code,
+    asset_code: assetCode,
     department_id: departmentId
   }, user.ip);
+}
+
+async function restock(id, rawQuantity, user) {
+  if (!isDepartmentUser(user)) throw new Error('FORBIDDEN');
+  const conn = await db.getConnection();
+
+  try {
+    await conn.beginTransaction();
+    const [rows] = await conn.query(
+      'SELECT * FROM inventory_items WHERE id=? FOR UPDATE',
+      [id]
+    );
+    if (!rows.length) throw new Error('NOT_FOUND');
+    const item = rows[0];
+    if (!canAccess(user, item)) throw new Error('FORBIDDEN');
+    if (item.status === 'RETIRED') throw new Error('RETIRED_ITEM');
+    if (!['AVAILABLE', 'ASSIGNED'].includes(item.status)) throw new Error('STOCK_NOT_AVAILABLE');
+
+    const chemical = Boolean(item.chemical_form);
+    const quantity = normalizeStockQuantity(rawQuantity, chemical);
+    const balance = Number(item.quantity) + quantity;
+    await conn.query(
+      "UPDATE inventory_items SET quantity=?,status='AVAILABLE' WHERE id=?",
+      [balance, id]
+    );
+    await conn.query(
+      'INSERT INTO inventory_transactions(inventory_id,actor_id,action,quantity,unit,details) VALUES(?,?,?,?,?,?)',
+      [id, user.id, 'ADD', quantity, item.unit, JSON.stringify({
+        restock: true,
+        batch_number: item.batch_number,
+        expiry_date: item.expiry_date,
+        container_capacity: item.container_capacity,
+        container_unit: item.container_unit,
+        balance_after: balance
+      })]
+    );
+    await conn.commit();
+    await audit(user.id, 'INVENTORY_RESTOCKED', 'inventory_items', id, {
+      quantity,
+      unit: item.unit,
+      balance_after: balance
+    }, user.ip);
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
+  }
 }
 
 async function update(id, data, user) {
@@ -113,27 +243,62 @@ async function update(id, data, user) {
   if (!old || !canAccess(user, old)) throw new Error('FORBIDDEN');
   if (old.status === 'RETIRED') throw new Error('RETIRED_ITEM');
 
+  const chemical = chemicalDetails(data);
+  if (Boolean(chemical) !== Boolean(old.chemical_form)) throw new Error('CHEMICAL_TYPE_IMMUTABLE');
+
+  const receivedDate = String(data.received_date || '').trim();
+  const vendorName = String(data.vendor_name || '').trim();
+  const vendorBillNo = String(data.vendor_bill_no || '').trim();
+  const makeGrade = String(data.make_grade || '').trim();
+  const receivedBy = String(data.received_by || '').trim();
+
+  if (chemical) {
+    const [[assignmentCount]] = await db.query(
+      'SELECT COUNT(*) AS count FROM inventory_assignments WHERE inventory_id=?',
+      [id]
+    );
+    if (Number(assignmentCount.count) > 0) {
+      if (
+        chemical.form !== old.chemical_form ||
+        String(data.name || '').trim() !== old.name ||
+        chemical.batchNumber !== old.batch_number ||
+        chemical.expiryDate !== old.expiry_date ||
+        Number(chemical.capacity) !== Number(old.container_capacity) ||
+        chemical.unit !== old.container_unit
+      ) {
+        throw new Error('CHEMICAL_STOCK_METADATA_LOCKED');
+      }
+    }
+  }
   const departmentId = departmentForWrite(user, data.department_id || old.department_id);
-  const itemType = data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
+  const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
 
   await db.query(`
     UPDATE inventory_items SET
-      asset_code=?,name=?,item_type=?,category=?,description=?,serial_number=?,
-      unit=?,department_id=?,location=?,batch_number=?,manufacturer=?,expiry_date=?
+      name=?,item_type=?,description=?,serial_number=?,
+      unit=?,department_id=?,location=?,batch_number=?,manufacturer=?,
+      vendor_name=?,vendor_bill_no=?,make_grade=?,received_by=?,received_date=?,expiry_date=?,
+      chemical_form=?,container_capacity=?,container_unit=?
     WHERE id=?
   `, [
-    String(data.asset_code || '').trim(),
     String(data.name || '').trim(),
     itemType,
-    data.category || null,
     data.description || null,
     data.serial_number || null,
-    data.unit || old.unit,
+    chemical ? 'Bottle' : data.unit || old.unit,
     departmentId,
     data.location || null,
-    data.batch_number || null,
+    chemical ? chemical.batchNumber : data.batch_number || null,
     data.manufacturer || null,
-    data.expiry_date || null,
+    vendorName || null,
+    vendorBillNo || null,
+    makeGrade || null,
+    receivedBy || null,
+    receivedDate || null,
+    chemical ? chemical.expiryDate : data.expiry_date || null,
+    chemical?.form || null,
+    chemical?.capacity || null,
+    chemical?.unit || null,
     id
   ]);
 
@@ -142,7 +307,7 @@ async function update(id, data, user) {
     [id, user.id, 'UPDATE', JSON.stringify({ before: old, after: data })]
   );
   await audit(user.id, 'INVENTORY_UPDATED', 'inventory_items', id, {
-    asset_code: data.asset_code,
+    asset_code: old.asset_code,
     department_id: departmentId
   }, user.ip);
 }
@@ -168,7 +333,6 @@ async function retire(id, user) {
 
 async function assign(id, employeeId, rawQuantity, actor) {
   if (!isDepartmentUser(actor)) throw new Error('FORBIDDEN');
-  const quantity = normalizeQuantity(rawQuantity);
   const conn = await db.getConnection();
 
   try {
@@ -182,6 +346,7 @@ async function assign(id, employeeId, rawQuantity, actor) {
     const item = items[0];
 
     if (!canAccess(actor, item)) throw new Error('FORBIDDEN');
+    const quantity = normalizeStockQuantity(rawQuantity, Boolean(item.chemical_form));
     if (item.status !== 'AVAILABLE' || Number(item.quantity) < quantity) {
       throw new Error('INSUFFICIENT');
     }
@@ -210,22 +375,37 @@ async function assign(id, employeeId, rawQuantity, actor) {
     `, [quantity, quantity, id]);
 
     const [assignment] = await conn.query(`
-      INSERT INTO inventory_assignments(inventory_id,employee_id,quantity,unit,assigned_by)
-      VALUES(?,?,?,?,?)
-    `, [id, employeeId, quantity, item.unit, actor.id]);
+      INSERT INTO inventory_assignments(
+        inventory_id,employee_id,quantity,unit,chemical_form,batch_number,expiry_date,
+        container_capacity,container_unit,assigned_by
+      ) VALUES(?,?,?,?,?,?,?,?,?,?)
+    `, [
+      id, employeeId, quantity, item.unit, item.chemical_form, item.batch_number,
+      item.expiry_date, item.container_capacity, item.container_unit, actor.id
+    ]);
 
     await conn.query(`
       INSERT INTO inventory_transactions(inventory_id,employee_id,actor_id,action,quantity,unit,details)
       VALUES(?,?,?,?,?,?,?)
     `, [id, employeeId, actor.id, 'ASSIGN', quantity, item.unit,
-      JSON.stringify({ assignment_id: assignment.insertId })]);
+      JSON.stringify({
+        assignment_id: assignment.insertId,
+        batch_number: item.batch_number,
+        expiry_date: item.expiry_date,
+        chemical_form: item.chemical_form,
+        container_capacity: item.container_capacity,
+        container_unit: item.container_unit,
+        balance_after: Number(item.quantity) - quantity
+      })]);
 
     await conn.commit();
     await audit(actor.id, 'INVENTORY_ASSIGNED', 'inventory_items', id, {
       assignment_id: assignment.insertId,
       employee_id: employeeId,
       quantity,
-      unit: item.unit
+      unit: item.unit,
+      batch_number: item.batch_number,
+      expiry_date: item.expiry_date
     }, actor.ip);
 
     return assignment.insertId;
@@ -238,15 +418,14 @@ async function assign(id, employeeId, rawQuantity, actor) {
 }
 
 async function returnAssignment(assignmentId, rawQuantity, note, actor) {
-  if (!isDepartmentUser(actor)) throw new Error('FORBIDDEN');
-  const quantity = normalizeQuantity(rawQuantity);
+  if (!isAdmin(actor) && !isDepartmentUser(actor)) throw new Error('FORBIDDEN');
   const conn = await db.getConnection();
 
   try {
     await conn.beginTransaction();
 
     const [rows] = await conn.query(`
-      SELECT a.*,i.department_id,i.status AS inventory_status
+      SELECT a.*,i.department_id,i.status AS inventory_status,i.quantity AS stock_balance
       FROM inventory_assignments a
       JOIN inventory_items i ON i.id=a.inventory_id
       WHERE a.id=? AND a.returned_at IS NULL
@@ -255,9 +434,15 @@ async function returnAssignment(assignmentId, rawQuantity, note, actor) {
     if (!rows.length) throw new Error('NOT_FOUND');
 
     const assignment = rows[0];
-    if (Number(actor.department_id) !== Number(assignment.department_id)) {
+    const chemical = Boolean(assignment.chemical_form);
+    if (chemical && !isAdmin(actor)) throw new Error('CHEMICAL_RETURN_ADMIN_ONLY');
+    const returnNote = String(note || '').trim();
+    if (chemical && !returnNote) throw new Error('CHEMICAL_RETURN_NOTE_REQUIRED');
+    if (returnNote.length > 500) throw new Error('INVALID_RETURN_NOTE');
+    if (!isAdmin(actor) && Number(actor.department_id) !== Number(assignment.department_id)) {
       throw new Error('FORBIDDEN');
     }
+    const quantity = normalizeStockQuantity(rawQuantity, chemical);
     if (quantity > Number(assignment.quantity)) throw new Error('INVALID_RETURN');
 
     const full = quantity === Number(assignment.quantity);
@@ -266,13 +451,13 @@ async function returnAssignment(assignmentId, rawQuantity, note, actor) {
         UPDATE inventory_assignments
         SET returned_at=NOW(),returned_quantity=?,return_note=?
         WHERE id=?
-      `, [quantity, note || null, assignmentId]);
+      `, [quantity, returnNote || null, assignmentId]);
     } else {
       await conn.query(`
         UPDATE inventory_assignments
         SET quantity=quantity-?,return_note=?
         WHERE id=?
-      `, [quantity, note || null, assignmentId]);
+      `, [quantity, returnNote || null, assignmentId]);
     }
 
     await conn.query(`
@@ -285,7 +470,17 @@ async function returnAssignment(assignmentId, rawQuantity, note, actor) {
       INSERT INTO inventory_transactions(inventory_id,user_id,employee_id,actor_id,action,quantity,unit,details)
       VALUES(?,?,?,?,?,?,?,?)
     `, [assignment.inventory_id, assignment.user_id, assignment.employee_id, actor.id, 'RETURN', quantity,
-      assignment.unit, JSON.stringify({ assignment_id: assignmentId, note: note || null, full_return: full })]);
+      assignment.unit, JSON.stringify({
+        assignment_id: assignmentId,
+        note: returnNote || null,
+        full_return: full,
+        batch_number: assignment.batch_number,
+        expiry_date: assignment.expiry_date,
+        chemical_form: assignment.chemical_form,
+        container_capacity: assignment.container_capacity,
+        container_unit: assignment.container_unit,
+        balance_after: Number(assignment.stock_balance) + quantity
+      })]);
 
     await conn.commit();
     await audit(actor.id, 'INVENTORY_RETURNED', 'inventory_items', assignment.inventory_id, {
@@ -303,22 +498,25 @@ async function returnAssignment(assignmentId, rawQuantity, note, actor) {
 }
 
 async function assignments(user) {
-  if (!isDepartmentUser(user)) throw new Error('FORBIDDEN');
+  if (!isAdmin(user) && !isDepartmentUser(user)) throw new Error('FORBIDDEN');
   let sql = `
     SELECT a.*,i.asset_code,i.name AS item_name,i.department_id,
            d.name AS department,COALESCE(e.name,u.name) AS user_name,
            COALESCE(e.employee_code,u.employee_code) AS employee_code,
-           ab.name AS assigned_by_name
+           COALESCE(ab.name,'Deleted user') AS assigned_by_name
     FROM inventory_assignments a
     JOIN inventory_items i ON i.id=a.inventory_id
     JOIN departments d ON d.id=i.department_id
     LEFT JOIN users u ON u.id=a.user_id
     LEFT JOIN employees e ON e.id=a.employee_id
-    JOIN users ab ON ab.id=a.assigned_by
+    LEFT JOIN users ab ON ab.id=a.assigned_by
     WHERE 1=1
   `;
-  sql += ' AND i.department_id=?';
-  const params = [user.department_id];
+  const params = [];
+  if (!isAdmin(user)) {
+    sql += ' AND i.department_id=?';
+    params.push(user.department_id);
+  }
 
   sql += ' ORDER BY a.assigned_at DESC';
   const [rows] = await db.query(sql, params);
@@ -328,11 +526,11 @@ async function assignments(user) {
 async function transactions(user) {
   let sql = `
     SELECT t.*,i.asset_code,i.name AS item_name,d.name AS department,
-           actor.name AS actor_name,COALESCE(e.name,u.name) AS affected_user
+           COALESCE(actor.name,'Deleted user') AS actor_name,COALESCE(e.name,u.name) AS affected_user
     FROM inventory_transactions t
     JOIN inventory_items i ON i.id=t.inventory_id
     JOIN departments d ON d.id=i.department_id
-    JOIN users actor ON actor.id=t.actor_id
+    LEFT JOIN users actor ON actor.id=t.actor_id
     LEFT JOIN users u ON u.id=t.user_id
     LEFT JOIN employees e ON e.id=t.employee_id
     WHERE 1=1
@@ -355,11 +553,11 @@ async function transactionsForItem(user, inventoryId) {
 
   const [rows] = await db.query(`
     SELECT t.*,i.asset_code,i.name AS item_name,d.name AS department,
-           actor.name AS actor_name,COALESCE(e.name,u.name) AS affected_user
+           COALESCE(actor.name,'Deleted user') AS actor_name,COALESCE(e.name,u.name) AS affected_user
     FROM inventory_transactions t
     JOIN inventory_items i ON i.id=t.inventory_id
     JOIN departments d ON d.id=i.department_id
-    JOIN users actor ON actor.id=t.actor_id
+    LEFT JOIN users actor ON actor.id=t.actor_id
     LEFT JOIN users u ON u.id=t.user_id
     LEFT JOIN employees e ON e.id=t.employee_id
     WHERE t.inventory_id=?
@@ -371,7 +569,9 @@ async function transactionsForItem(user, inventoryId) {
 module.exports = {
   list,
   get,
+  chemicalBatches,
   create,
+  restock,
   update,
   retire,
   assign,

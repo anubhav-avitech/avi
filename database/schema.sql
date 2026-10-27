@@ -92,7 +92,15 @@ CREATE TABLE inventory_items (
   location VARCHAR(150) NULL,
   batch_number VARCHAR(100) NULL,
   manufacturer VARCHAR(150) NULL,
+  vendor_name VARCHAR(150) NULL,
+  vendor_bill_no VARCHAR(100) NULL,
+  make_grade VARCHAR(150) NULL,
+  received_by VARCHAR(150) NULL,
+  received_date DATE NULL,
   expiry_date DATE NULL,
+  chemical_form ENUM('LIQUID','POWDER') NULL,
+  container_capacity DECIMAL(12,3) NULL,
+  container_unit ENUM('ml','L','g','kg') NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY(department_id) REFERENCES departments(id) ON DELETE RESTRICT,
@@ -109,15 +117,20 @@ CREATE TABLE inventory_assignments (
   employee_id BIGINT UNSIGNED NULL,
   quantity DECIMAL(12,3) NOT NULL,
   unit VARCHAR(30) NOT NULL,
-  assigned_by BIGINT UNSIGNED NOT NULL,
+  chemical_form ENUM('LIQUID','POWDER') NULL,
+  batch_number VARCHAR(100) NULL,
+  expiry_date DATE NULL,
+  container_capacity DECIMAL(12,3) NULL,
+  container_unit ENUM('ml','L','g','kg') NULL,
+  assigned_by BIGINT UNSIGNED NULL,
   assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   returned_at TIMESTAMP NULL,
   returned_quantity DECIMAL(12,3) NULL,
   return_note VARCHAR(500) NULL,
   FOREIGN KEY(inventory_id) REFERENCES inventory_items(id) ON DELETE RESTRICT,
-  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
-  FOREIGN KEY(assigned_by) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY(assigned_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_assignment_inventory(inventory_id),
   INDEX idx_assignment_user(user_id),
   INDEX idx_assignment_employee(employee_id),
@@ -129,7 +142,7 @@ CREATE TABLE inventory_transactions (
   inventory_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NULL,
   employee_id BIGINT UNSIGNED NULL,
-  actor_id BIGINT UNSIGNED NOT NULL,
+  actor_id BIGINT UNSIGNED NULL,
   action ENUM('ADD','UPDATE','ASSIGN','RETURN','STATUS_CHANGE','RETIRE') NOT NULL,
   quantity DECIMAL(12,3) NULL,
   unit VARCHAR(30) NULL,
@@ -138,7 +151,7 @@ CREATE TABLE inventory_transactions (
   FOREIGN KEY(inventory_id) REFERENCES inventory_items(id) ON DELETE RESTRICT,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE SET NULL,
-  FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE RESTRICT,
+  FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_transaction_inventory(inventory_id),
   INDEX idx_transaction_employee(employee_id),
   INDEX idx_transaction_created(created_at)
@@ -187,7 +200,7 @@ INSERT INTO permissions(code,name,description) VALUES
 INSERT INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r CROSS JOIN permissions p
 WHERE r.name='Administrator'
-  AND p.code NOT IN ('INVENTORY_CREATE','ASSIGNMENT_CREATE','ASSIGNMENT_RETURN');
+  AND p.code NOT IN ('INVENTORY_CREATE','ASSIGNMENT_CREATE');
 
 INSERT INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r JOIN permissions p
