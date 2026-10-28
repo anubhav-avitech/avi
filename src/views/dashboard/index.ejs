@@ -1,1 +1,69 @@
-<div class="page-head"><div><h1>Dashboard</h1></div></div><section class="stats"><div class="stat"><small>Records</small><strong><%= data.summary.total||0 %></strong></div><div class="stat"><small>Total quantity</small><strong><%= data.summary.quantity||0 %></strong></div><div class="stat"><small>Available</small><strong><%= data.summary.available||0 %></strong></div><div class="stat"><small>Assigned</small><strong><%= data.summary.assigned||0 %></strong></div><div class="stat"><small>Maintenance</small><strong><%= data.summary.maintenance||0 %></strong></div></section><section class="card"><div class="card-head"><div><h2>Department stock</h2></div></div><table><thead><tr><th>Department</th><th>Records</th><th>Quantity</th></tr></thead><tbody><% data.departments.forEach(d=>{ %><tr><td><%= d.name %></td><td><%= d.items %></td><td><%= d.quantity %></td></tr><% }) %></tbody></table></section>
+<div class="page-head"><div><h1>Dashboard</h1></div></div>
+<section class="stats">
+  <div class="stat"><small>Records</small><strong><%= data.summary.total||0 %></strong></div>
+  <div class="stat"><small>Total quantity</small><strong><%= data.summary.quantity||0 %></strong></div>
+  <div class="stat"><small>Available</small><strong><%= data.summary.available||0 %></strong></div>
+  <div class="stat"><small>Assigned</small><strong><%= data.summary.assigned||0 %></strong></div>
+  <div class="stat"><small>Maintenance</small><strong><%= data.summary.maintenance||0 %></strong></div>
+</section>
+<section class="card stock-by-unit-card">
+  <div class="card-head">
+    <div>
+      <h2>Stock by unit</h2>
+      <p class="muted">Remaining quantities across all non-retired inventory.</p>
+    </div>
+  </div>
+  <% if(data.stockByUnit.length){ %>
+    <div class="stock-by-unit-grid">
+      <% data.stockByUnit.forEach(stock=>{ %>
+        <div class="stock-unit-total">
+          <strong><%= Number(stock.quantity).toLocaleString() %></strong>
+          <span><%= stock.unit %> total</span>
+          <small><%= stock.item_lines %> inventory <%= Number(stock.item_lines)===1?'line':'lines' %></small>
+        </div>
+      <% }) %>
+    </div>
+  <% } else { %>
+    <p class="empty">No active stock.</p>
+  <% } %>
+</section>
+<% if(data.expiringChemicals.length){ %>
+  <section class="card expiry-alert-card">
+    <div class="card-head expiry-alert-head">
+      <div>
+        <div class="eyebrow">CHEMICAL STOCK</div>
+        <h2>Expiry alerts</h2>
+        <p class="muted">Chemicals expiring within <%= data.expiryWarningDays %> days, or already expired.</p>
+      </div>
+      <a href="/inventory">View inventory</a>
+    </div>
+    <div class="expiry-alert-list">
+      <% data.expiringChemicals.forEach(chemical=>{ %>
+        <div class="expiry-alert-row">
+          <div class="expiry-alert-item">
+            <strong><%= chemical.name %></strong>
+            <small><%= chemical.asset_code %> · Batch <%= chemical.batch_number||'—' %> · <%= chemical.department %></small>
+          </div>
+          <div class="expiry-alert-stock">
+            <strong><%= chemical.quantity %> <%= chemical.unit %></strong>
+            <small><%= chemical.container_capacity %> <%= chemical.container_unit %> each</small>
+            <small>Total left: <%= Number(chemical.quantity*chemical.container_capacity).toLocaleString() %> <%= chemical.container_unit %></small>
+          </div>
+          <div class="expiry-alert-date">
+            <span class="expiry-badge <%= chemical.days_to_expiry<0?'expired':chemical.days_to_expiry<=7?'urgent':'upcoming' %>">
+              <%= chemical.days_to_expiry<0?`Expired ${Math.abs(chemical.days_to_expiry)} days ago`:chemical.days_to_expiry===0?'Expires today':`Expires in ${chemical.days_to_expiry} days` %>
+            </span>
+            <small>Expiry date: <%= chemical.expiry_date %></small>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  </section>
+<% } %>
+<section class="card">
+  <div class="card-head"><div><h2>Department stock</h2></div></div>
+  <table>
+    <thead><tr><th>Department</th><th>Records</th><th>Quantity</th></tr></thead>
+    <tbody><% data.departments.forEach(d=>{ %><tr><td><%= d.name %></td><td><%= d.items %></td><td><%= d.quantity %></td></tr><% }) %></tbody>
+  </table>
+</section>

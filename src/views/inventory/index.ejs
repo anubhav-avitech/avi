@@ -20,30 +20,45 @@
   <% } %>
   <button class="secondary">Search</button>
 </form>
-<section class="card">
-  <table>
+<section class="card inventory-table-card">
+  <table class="inventory-table">
     <thead><tr><th>Item</th><th>Type</th><th>Department</th><th>Stock balance</th><th>Status</th><th></th></tr></thead>
     <tbody>
       <% if(!items.length){ %><tr><td colspan="6" class="empty">No inventory found.</td></tr><% } %>
       <% items.forEach(i=>{ %>
         <% const today=new Date(); today.setHours(0,0,0,0); const daysToExpiry=i.expiry_date?Math.ceil((new Date(`${i.expiry_date}T00:00:00`)-today)/86400000):null; %>
         <tr>
-          <td>
+          <td class="inventory-item">
             <strong><%= i.name %></strong>
-            <small>
-              <%= i.asset_code %><% if(i.serial_number){ %> · <%= i.serial_number %><% } %>
-              <% if(i.chemical_form){ %> · <%= i.chemical_form.toLowerCase() %> · batch <%= i.batch_number %> · expiry <%= i.expiry_date %><% } %>
-            </small>
+            <div class="item-subdetails">
+              <span class="item-reference"><%= i.asset_code %></span>
+              <% if(i.serial_number){ %><span>Serial: <%= i.serial_number %></span><% } %>
+            </div>
             <% if(i.chemical_form){ %>
-              <small>Vendor: <%= i.vendor_name || '—' %> · Bill: <%= i.vendor_bill_no || '—' %> · Make / Grade: <%= i.make_grade || '—' %> · Mfg: <%= i.manufacturer || '—' %> · Received: <%= i.received_date || '—' %> · By: <%= i.received_by || '—' %></small>
+              <div class="chemical-summary">
+                <span><%= i.chemical_form.toLowerCase() %></span>
+                <span>Batch <%= i.batch_number || '—' %></span>
+                <span>Expires <%= i.expiry_date || '—' %></span>
+              </div>
+              <details class="purchase-details">
+                <summary>Purchase details</summary>
+                <dl>
+                  <div><dt>Vendor</dt><dd><%= i.vendor_name || '—' %></dd></div>
+                  <div><dt>Bill no.</dt><dd><%= i.vendor_bill_no || '—' %></dd></div>
+                  <div><dt>Make / grade</dt><dd><%= i.make_grade || '—' %></dd></div>
+                  <div><dt>Manufacturer</dt><dd><%= i.manufacturer || '—' %></dd></div>
+                  <div><dt>Received</dt><dd><%= i.received_date || '—' %></dd></div>
+                  <div><dt>Received by</dt><dd><%= i.received_by || '—' %></dd></div>
+                </dl>
+              </details>
             <% } %>
-            <% if(i.chemical_form&&daysToExpiry<0){ %><span class="tag">EXPIRED</span><% }else if(i.chemical_form&&daysToExpiry<=30){ %><span class="tag">EXPIRING IN <%= daysToExpiry %> DAYS</span><% } %>
+            <% if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<0){ %><span class="tag">EXPIRED</span><% }else if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<=30){ %><span class="tag"><%= daysToExpiry===0?'EXPIRES TODAY':`EXPIRING IN ${daysToExpiry} DAYS` %></span><% } %>
           </td>
           <td><span class="tag"><%= i.chemical_form?'CHEMICAL':i.item_type %></span></td>
           <td><%= i.department %></td>
           <td>
             <strong><%= i.quantity %> <%= i.unit %></strong>
-            <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> each · balance <%= i.quantity*i.container_capacity %> <%= i.container_unit %></small><% } %>
+            <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> each · total left <%= Number(i.quantity*i.container_capacity).toLocaleString() %> <%= i.container_unit %></small><% } %>
           </td>
           <td><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td>
           <td class="actions">
@@ -51,7 +66,7 @@
             <% if(user.permissions.includes('INVENTORY_CREATE')&&user.role_name==='Department User'&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/restock">Add stock</a><% } %>
             <% if(user.permissions.includes('INVENTORY_UPDATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/edit">Edit</a><% } %>
             <% if(user.permissions.includes('INVENTORY_DELETE')&&i.status!=='RETIRED'){ %>
-              <form method="post" action="/inventory/<%= i.id %>/retire"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Retire</button></form>
+              <form method="post" action="/inventory/<%= i.id %>/retire" data-item-name="<%= i.name %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Retire</button></form>
             <% } %>
           </td>
         </tr>
@@ -59,3 +74,57 @@
     </tbody>
   </table>
 </section>
+<dialog class="retire-dialog" id="retire_dialog" aria-labelledby="retire_dialog_title">
+  <form method="dialog">
+    <div class="eyebrow">CONFIRM RETIREMENT</div>
+    <h2 id="retire_dialog_title">Retire inventory item?</h2>
+    <p class="muted">Type <strong>retire</strong> to confirm retiring <span id="retire_item_name"></span>.</p>
+    <label for="retire_confirmation">Confirmation<input id="retire_confirmation" autocomplete="off" placeholder="Type retire"></label>
+    <div class="retire-dialog-actions">
+      <button class="secondary" type="button" id="cancel_retire">Cancel</button>
+      <button class="primary retire-confirm-button" type="button" id="confirm_retire" disabled>Retire item</button>
+    </div>
+  </form>
+</dialog>
+<script>
+  const retireDialog = document.getElementById('retire_dialog');
+  const retireInput = document.getElementById('retire_confirmation');
+  const confirmRetireButton = document.getElementById('confirm_retire');
+  const retireItemName = document.getElementById('retire_item_name');
+  let pendingRetireForm = null;
+  let confirmedRetirement = false;
+
+  document.querySelectorAll('form[action$="/retire"]').forEach(form => {
+    form.addEventListener('submit', event => {
+      if (confirmedRetirement) {
+        confirmedRetirement = false;
+        return;
+      }
+      event.preventDefault();
+      pendingRetireForm = form;
+      retireItemName.textContent = form.dataset.itemName;
+      retireInput.value = '';
+      confirmRetireButton.disabled = true;
+      retireDialog.showModal();
+      retireInput.focus();
+    });
+  });
+
+  retireInput.addEventListener('input', () => {
+    confirmRetireButton.disabled = retireInput.value.trim().toLowerCase() !== 'retire';
+  });
+
+  document.getElementById('cancel_retire').addEventListener('click', () => retireDialog.close());
+  retireDialog.addEventListener('close', () => {
+    pendingRetireForm = null;
+  });
+
+  confirmRetireButton.addEventListener('click', () => {
+    if (!pendingRetireForm || retireInput.value.trim().toLowerCase() !== 'retire') return;
+    const form = pendingRetireForm;
+    pendingRetireForm = null;
+    retireDialog.close();
+    confirmedRetirement = true;
+    form.requestSubmit();
+  });
+</script>

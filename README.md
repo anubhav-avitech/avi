@@ -19,7 +19,7 @@ There are exactly two application scopes:
 
 ### Department User
 - Belongs to exactly one department.
-- Can view, add and retire inventory only in that department.
+- Can view, add, edit and retire inventory only in that department.
 - Can issue inventory only within that department.
 - Can return non-chemical inventory in that department; chemical issues are treated as consumed and cannot be returned by Department Users.
 - Can add non-login employee records using only employee ID and name, then assign department inventory to them.
@@ -139,3 +139,11 @@ To add non-login department employees as assignment recipients, run this one-tim
 ```bash
 mysql -u root -p < database/migrate-department-employees.sql
 ```
+
+To allow Department Users to edit inventory within their own department, apply:
+
+```bash
+mysql -u root -p < database/migrate-department-inventory-update.sql
+```
+
+Department Users must sign out and back in after the migration for the new permission to appear in their session.

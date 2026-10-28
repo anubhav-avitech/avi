@@ -97,7 +97,7 @@
     document.getElementById('expiry_date').required = isChemical;
     if (isChemical) {
       itemType.value = 'CONSUMABLE';
-      unit.value = 'Bottle';
+      if (unit.value === 'Piece') unit.value = 'Bottle';
       const validUnits = chemicalForm.value === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
       if (!validUnits.includes(capacityUnit.value)) {
         capacityUnit.value = chemicalForm.value === 'LIQUID' ? 'ml' : 'g';

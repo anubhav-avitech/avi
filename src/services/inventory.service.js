@@ -23,6 +23,8 @@ function chemicalDetails(data) {
   if (!form) return null;
   if (!['LIQUID', 'POWDER'].includes(form)) throw new Error('INVALID_CHEMICAL');
 
+  const packageUnit = String(data.unit || '');
+  const validPackageUnits = ['Piece', 'Bottle', 'Box', 'Pair', 'Pack', 'Kg', 'Gram', 'Liter', 'ml', 'Kit', 'Set'];
   const rawCapacity = String(data.container_capacity || '');
   if (!/^\d+(?:\.\d{1,3})?$/.test(rawCapacity)) throw new Error('INVALID_CHEMICAL');
   const capacity = normalizeQuantity(rawCapacity);
@@ -33,6 +35,7 @@ function chemicalDetails(data) {
   const expiryDate = String(data.expiry_date || '');
   const parsedExpiry = new Date(`${expiryDate}T00:00:00Z`);
   if (
+    !validPackageUnits.includes(packageUnit) ||
     !validUnits.includes(unit) ||
     !chemicalName ||
     chemicalName.length > 150 ||
@@ -50,6 +53,7 @@ function chemicalDetails(data) {
     form,
     capacity,
     unit,
+    packageUnit,
     batchNumber,
     expiryDate
   };
@@ -84,7 +88,7 @@ async function list(user, search, departmentId) {
     params.push(term, term, term, term, term);
   }
 
-  sql += ' ORDER BY i.updated_at DESC';
+  sql += ' ORDER BY i.name ASC,i.batch_number ASC,i.updated_at DESC';
   const [rows] = await db.query(sql, params);
   return rows;
 }
@@ -155,7 +159,7 @@ async function create(data, user) {
     data.description || null,
     data.serial_number || null,
     quantity,
-    chemical ? 'Bottle' : data.unit || 'Piece',
+    chemical ? chemical.packageUnit : data.unit || 'Piece',
     departmentId,
     'AVAILABLE',
     data.location || null,
@@ -174,7 +178,7 @@ async function create(data, user) {
 
   await db.query(
     'INSERT INTO inventory_transactions(inventory_id,actor_id,action,quantity,unit,details) VALUES(?,?,?,?,?,?)',
-    [result.insertId, user.id, 'ADD', quantity, chemical ? 'Bottle' : data.unit || 'Piece', JSON.stringify({
+    [result.insertId, user.id, 'ADD', quantity, chemical ? chemical.packageUnit : data.unit || 'Piece', JSON.stringify({
       asset_code: assetCode,
       chemical_form: chemical?.form || null,
       batch_number: chemical?.batchNumber || data.batch_number || null,
@@ -285,7 +289,7 @@ async function update(id, data, user) {
     itemType,
     data.description || null,
     data.serial_number || null,
-    chemical ? 'Bottle' : data.unit || old.unit,
+    chemical ? chemical.packageUnit : data.unit || old.unit,
     departmentId,
     data.location || null,
     chemical ? chemical.batchNumber : data.batch_number || null,
