@@ -1,0 +1,69 @@
+<div class="page-head receiving-record-toolbar">
+  <div>
+    <div class="eyebrow">AVITECH NUTRITION PVT. LTD.</div>
+    <h1>Batch Receiving Confirmation</h1>
+    <p class="muted">Company-issued confirmation of items received for the batch below.</p>
+  </div>
+  <div class="form-actions">
+    <a class="secondary button" href="/inventory">Back</a>
+    <button class="primary" type="button" id="print_receiving_record">Print / Save PDF</button>
+  </div>
+</div>
+<section class="card receiving-record">
+  <header class="receiving-record-header">
+    <div>
+      <div class="receiving-record-company">AVITECH NUTRITION PVT. LTD.</div>
+      <div class="eyebrow">BATCH RECEIVING CONFIRMATION</div>
+      <h2>Batch <%= record.batch_number %></h2>
+      <p><%= record.department %> · <%= record.lines.length %> chemical stock lines</p>
+    </div>
+    <div class="receiving-record-reference">
+      <span>Vendor bills represented</span>
+      <strong><%= [...new Set(record.lines.map(line=>line.vendor_bill_no).filter(Boolean))].join(', ') || 'Not recorded' %></strong>
+    </div>
+  </header>
+
+  <h3>All items in this batch</h3>
+  <table class="receiving-lines">
+    <thead>
+      <tr>
+        <th>Chemical</th>
+        <th>Vendor / bill no.</th>
+        <th>Received</th>
+        <th>Received by</th>
+        <th>Make / grade · manufacturer</th>
+        <th>Expiry</th>
+        <th>Package size</th>
+        <th>Quantity received</th>
+        <th>Total received</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% record.lines.forEach(line=>{ %>
+        <tr>
+          <td><strong><%= line.name %></strong><small><%= line.asset_code %></small></td>
+          <td><%= line.vendor_name || '—' %><small><%= line.vendor_bill_no || 'No bill number' %></small></td>
+          <td><%= line.received_date || '—' %></td>
+          <td><%= line.received_by || '—' %></td>
+          <td><%= line.make_grade || '—' %><small><%= line.manufacturer || '—' %></small></td>
+          <td><%= line.expiry_date || '—' %></td>
+          <td><%= Number(line.container_capacity).toLocaleString() %> <%= line.container_unit %> / <%= line.unit %></td>
+          <td><%= Number(line.quantity_received).toLocaleString() %> <%= line.unit %></td>
+          <td><%= Number(line.quantity_received*line.container_capacity).toLocaleString() %> <%= line.container_unit %></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+
+  <footer class="receiving-record-footer">
+    <p><strong>Prepared by:</strong> <%= preparedBy %><br>For AVITECH NUTRITION PVT. LTD.</p>
+    <p>This confirmation records the batch items and quantities received by AVITECH NUTRITION PVT. LTD.</p>
+  </footer>
+  <div class="receiving-record-signatures">
+    <div><span>Authorized company representative</span><span>Name / signature / date</span></div>
+    <div><span>Vendor representative acknowledgment</span><span>Name / signature / date</span></div>
+  </div>
+</section>
+<script>
+  document.getElementById('print_receiving_record').addEventListener('click', () => window.print());
+</script>

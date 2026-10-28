@@ -59,6 +59,12 @@ app.use(
 */
 
 app.use(
+  express.static(path.join(__dirname, '..', 'public'), {
+    maxAge: '1d'
+  })
+);
+
+app.use(
   express.static(path.join(__dirname, 'public'), {
     maxAge: '1d'
   })

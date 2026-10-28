@@ -88,6 +88,41 @@ router.get('/inventory', requireAuth, requirePermission('INVENTORY_VIEW'), async
   }
 });
 
+router.get('/inventory/batches', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
+  try {
+    res.render('inventory/batches', {
+      title: 'Batch receiving records',
+      batches: await inventory.batchReceivingRecords(req.session.user)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/inventory/batches/receiving-record', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
+  try {
+    const record = await inventory.batchReceivingRecord(
+      req.query.department_id,
+      req.query.batch_number,
+      req.session.user
+    );
+    if (!record) return res.status(404).render('errors/404', { title: 'Not found' });
+    res.render('inventory/receiving-record', {
+      title: `Batch ${record.batch_number} receiving record`,
+      record,
+      preparedBy: req.session.user.name
+    });
+  } catch (error) {
+    if (error.message === 'INVALID_BATCH' || error.message === 'INVALID_DEPARTMENT') {
+      return res.status(404).render('errors/404', { title: 'Not found' });
+    }
+    if (error.message === 'FORBIDDEN') {
+      return res.status(403).render('errors/403', { title: 'Access denied' });
+    }
+    next(error);
+  }
+});
+
 router.get('/inventory/new', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
   try {
     const deps = req.session.user.role_scope === 'ALL'
@@ -455,56 +490,10 @@ router.post('/users/:id/delete', requireAuth, requireAdmin, requirePermission('U
   }
 });
 
-router.get('/departments', requireAuth, requireAdmin, requirePermission('DEPARTMENTS_MANAGE'), async (req, res, next) => {
+router.get('/departments', requireAuth, requireAdmin, async (req, res, next) => {
   try {
     res.render('departments/index', { title: 'Departments', rows: await departments.list() });
   } catch (error) {
-    next(error);
-  }
-});
-
-router.post('/departments/new', requireAuth, requireAdmin, requirePermission('DEPARTMENTS_MANAGE'), async (req, res, next) => {
-  try {
-    await departments.create(req.body, req.session.user);
-    setFlash(req, 'Department created.');
-    res.redirect('/departments');
-  } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') {
-      setFlash(req, 'A department with that name already exists.', 'error');
-      return res.redirect('/departments');
-    }
-    next(error);
-  }
-});
-
-router.post('/departments/:id/edit', requireAuth, requireAdmin, requirePermission('DEPARTMENTS_MANAGE'), async (req, res, next) => {
-  try {
-    await departments.update(req.params.id, req.body, req.session.user);
-    setFlash(req, 'Department updated.');
-    res.redirect('/departments');
-  } catch (error) {
-    if (error.code === 'ER_DUP_ENTRY') {
-      setFlash(req, 'A department with that name already exists.', 'error');
-      return res.redirect('/departments');
-    }
-    next(error);
-  }
-});
-
-router.post('/departments/:id/delete', requireAuth, requireAdmin, requirePermission('DEPARTMENTS_MANAGE'), async (req, res, next) => {
-  try {
-    await departments.remove(req.params.id, req.session.user);
-    setFlash(req, 'Department deleted.');
-    res.redirect('/departments');
-  } catch (error) {
-    if (error.message === 'DEPARTMENT_IN_USE') {
-      setFlash(req, 'Cannot delete a department that has users or inventory.', 'error');
-      return res.redirect('/departments');
-    }
-    if (error.message === 'DEPARTMENT_NOT_FOUND') {
-      setFlash(req, 'Department not found.', 'error');
-      return res.redirect('/departments');
-    }
     next(error);
   }
 });

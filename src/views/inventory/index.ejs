@@ -4,9 +4,12 @@
     <h1>Inventory</h1>
     <p class="muted"><%= user.role_name==='Administrator'?'Company-wide inventory.':'Inventory for your department only.' %></p>
   </div>
-  <% if(user.role_name==='Department User'&&user.permissions.includes('INVENTORY_CREATE')){ %>
-    <a class="primary button" href="/inventory/new">Add item</a>
-  <% } %>
+  <div class="inventory-head-actions">
+    <a class="secondary button" href="/inventory/batches">Batch receiving records</a>
+    <% if(user.role_name==='Department User'&&user.permissions.includes('INVENTORY_CREATE')){ %>
+      <a class="primary button" href="/inventory/new">Add item</a>
+    <% } %>
+  </div>
 </div>
 <form class="toolbar" method="get">
   <input name="q" value="<%= query %>" placeholder="Search stock, batch, vendor or name…">

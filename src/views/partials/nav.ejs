@@ -1,5 +1,5 @@
 <header class="topbar">
-  <a class="brand" href="/"><span class="brand-mark">CI</span><span><b>Avitech</b> Inventory</span></a>
+  <a class="brand" href="/" aria-label="Avitech Nutrition inventory home"><img class="brand-logo" src="/logo.png" alt="Avitech Nutrition"></a>
   <nav>
     <a class="<%= path==='/'?'active':'' %>" href="/">Overview</a>
     <% if((user.permissions || []).includes('INVENTORY_VIEW')){ %> 
@@ -11,7 +11,6 @@
     <% } %>
     <% if(user.role_name==='Administrator'){ %>
       <% if(user.permissions.includes('USERS_VIEW')){ %><a class="<%= path.startsWith('/users')?'active':'' %>" href="/users">People</a><% } %>
-      <% if(user.permissions.includes('DEPARTMENTS_MANAGE')){ %><a class="<%= path.startsWith('/departments')?'active':'' %>" href="/departments">Departments</a><% } %>
       <% if(user.permissions.includes('AUDIT_VIEW')){ %><a class="<%= path.startsWith('/audit')?'active':'' %>" href="/audit">Audit</a><% } %>
     <% } %>
   </nav>

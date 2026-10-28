@@ -172,11 +172,6 @@ CREATE TABLE audit_logs (
 ) ENGINE=InnoDB;
 
 INSERT INTO departments(name,description) VALUES
-('IT','Information Technology'),
-('HR','Human Resources'),
-('Production','Production Department'),
-('Quality','Quality Department'),
-('Accounts','Accounts Department'),
 ('Lab','Laboratory');
 
 INSERT INTO roles(name,description,scope) VALUES
@@ -193,7 +188,6 @@ INSERT INTO permissions(code,name,description) VALUES
 ('ASSIGNMENT_RETURN','Return inventory','Process inventory returns within permitted scope'),
 ('USERS_VIEW','View users','Administrator-only user administration'),
 ('USERS_MANAGE','Manage users','Administrator-only user management'),
-('DEPARTMENTS_MANAGE','Manage departments','Administrator-only department management'),
 ('ROLES_MANAGE','Manage roles','Administrator-only role/permission management'),
 ('AUDIT_VIEW','View audit logs','Administrator-only system audit history');
 

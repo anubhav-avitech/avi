@@ -1,56 +1,20 @@
-<style>
-	.department-table{overflow-x:auto}
-	.department-table table{min-width:560px}
-	.department-table th:nth-child(3),.department-table td:nth-child(3){width:220px;text-align:right}
-	.department-action-buttons{display:flex;justify-content:flex-end;align-items:center;gap:16px;white-space:nowrap}
-	.department-action-buttons form{margin:0}
-	.department-dialog{width:min(400px,calc(100vw - 32px));padding:0;border:1px solid var(--line);border-radius:8px;background:var(--panel);color:var(--text);box-shadow:0 20px 60px rgba(20,24,30,.18)}
-	.department-dialog::backdrop{background:rgba(23,25,29,.38)}
-	.department-dialog-header{display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line)}
-	.department-dialog-form{display:grid;gap:14px;padding:16px}
-	.department-dialog-form label{display:flex;flex-direction:column;gap:6px;font-size:11px;font-weight:650;color:#454a53}
-	.department-dialog-actions{display:flex;justify-content:flex-end;gap:8px;padding-top:2px}
-</style>
-<div class="department-content">
-	<div class="page-head">
-		<div><div class="eyebrow">CONFIGURATION</div><h1>Departments</h1></div>
-		<% if(user.permissions.includes('DEPARTMENTS_MANAGE')){ %>
-			<button class="primary" type="button" onclick="document.getElementById('new-department-dialog').showModal()">Add department</button>
-			<dialog class="department-dialog" id="new-department-dialog" aria-labelledby="new-department-title">
-				<div class="department-dialog-header"><h2 id="new-department-title">Add department</h2><button class="link" type="button" onclick="this.closest('dialog').close()">Close</button></div>
-				<form method="post" action="/departments/new" class="department-dialog-form">
-					<input type="hidden" name="_csrf" value="<%= csrfToken %>">
-					<label>Name<input name="name" maxlength="100" required autofocus></label>
-					<div class="department-dialog-actions"><button class="secondary" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Create</button></div>
-				</form>
-			</dialog>
-		<% } %>
-	</div>
-	<section class="card department-table">
-		<table><thead><tr><th>Department</th><th>Status</th><% if(user.permissions.includes('DEPARTMENTS_MANAGE')){ %><th>Actions</th><% } %></tr></thead>
-			<tbody><% rows.forEach(d=>{ %>
-				<tr>
-					<td><strong><%= d.name %></strong></td>
-					<td><span class="status <%= d.status.toLowerCase() %>"><%= d.status %></span></td>
-					<% if(user.permissions.includes('DEPARTMENTS_MANAGE')){ %>
-						<td>
-							<div class="department-action-buttons">
-								<button class="link" type="button" onclick="document.getElementById('edit-department-<%= d.id %>').showModal()">Edit</button>
-								<form method="post" action="/departments/<%= d.id %>/delete" onsubmit="return confirm('Delete this department?')"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Delete</button></form>
-							</div>
-							<dialog class="department-dialog" id="edit-department-<%= d.id %>" aria-labelledby="edit-department-title-<%= d.id %>">
-								<div class="department-dialog-header"><h2 id="edit-department-title-<%= d.id %>">Edit department</h2><button class="link" type="button" onclick="this.closest('dialog').close()">Close</button></div>
-								<form method="post" action="/departments/<%= d.id %>/edit" class="department-dialog-form">
-									<input type="hidden" name="_csrf" value="<%= csrfToken %>">
-									<label>Name<input name="name" maxlength="100" value="<%= d.name %>" required></label>
-									<label>Status<select name="status"><option value="ACTIVE" <%= d.status==='ACTIVE'?'selected':'' %>>Active</option><option value="INACTIVE" <%= d.status==='INACTIVE'?'selected':'' %>>Inactive</option></select></label>
-									<div class="department-dialog-actions"><button class="secondary" type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Save changes</button></div>
-								</form>
-							</dialog>
-						</td>
-					<% } %>
-				</tr>
-			<% }) %></tbody>
-		</table>
-	</section>
+<div class="page-head">
+  <div>
+    <div class="eyebrow">LABORATORY</div>
+    <h1>Department</h1>
+    <p class="muted">This system is configured for one department.</p>
+  </div>
 </div>
+<section class="card">
+  <table>
+    <thead><tr><th>Department</th><th>Status</th></tr></thead>
+    <tbody>
+      <% rows.forEach(department=>{ %>
+        <tr>
+          <td><strong><%= department.name %></strong></td>
+          <td><span class="status <%= department.status.toLowerCase() %>"><%= department.status %></span></td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>

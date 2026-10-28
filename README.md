@@ -8,13 +8,14 @@ There are exactly two application scopes:
 
 ### Administrator
 - Company-wide access.
-- Manage every department's inventory.
+- Manage all laboratory inventory.
 - Edit and retire inventory; adding items is reserved for Department Users.
 - Manage inventory across departments, but cannot issue items.
 - View assignment history and process returns; chemical returns require an explanatory note.
 - View inventory history and audit logs.
 - Create, edit and permanently delete users. Deleting an account removes its login and personal details; assignment, transaction and audit history remains, with user references cleared.
-- Manage departments.
+- Retain administrator access without the ability to create or alter departments.
+- The system has one fixed Laboratory department: Lab.
 - No department restriction.
 
 ### Department User
@@ -87,6 +88,7 @@ The issue tracking keeps the operational information from the issue register:
 - Issuing containers automatically deducts them from the balance. Each issue records who issued it, who received it, when, its batch/expiry/package details and the balance afterwards.
 - Department Users cannot return chemicals. Administrators can record exceptional chemical returns, with a required reason; the return updates stock and is recorded in history.
 - Expiry dates and batches are visible in inventory and issue records for traceability.
+- Inventory provides one printable batch receiving confirmation per batch number and department, branded for AVITECH NUTRITION PVT. LTD. and listing all chemical stock lines with that batch number. It includes company and vendor acknowledgment signature fields; use the browser's print dialog to print or save it as a PDF.
 
 ## Setup
 
@@ -147,3 +149,11 @@ mysql -u root -p < database/migrate-department-inventory-update.sql
 ```
 
 Department Users must sign out and back in after the migration for the new permission to appear in their session.
+
+To configure an existing installation for a single fixed Lab department, back up the database and run:
+
+```bash
+mysql -u root -p < database/migrate-single-lab-department.sql
+```
+
+The migration stops without deleting anything if a non-Lab department still has users, employees, or inventory. It removes department-management permissions after the migration.

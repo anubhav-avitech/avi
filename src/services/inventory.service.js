@@ -103,6 +103,71 @@ async function get(id) {
   return rows[0] || null;
 }
 
+async function batchReceivingRecords(user) {
+  const departmentFilter = isAdmin(user) ? '' : 'AND i.department_id=?';
+  const params = isAdmin(user) ? [] : [user.department_id];
+  const [rows] = await db.query(`
+    SELECT i.department_id,d.name AS department,i.batch_number,
+           COUNT(*) AS line_count,
+           COUNT(DISTINCT i.name) AS chemical_count,
+           COUNT(DISTINCT i.vendor_bill_no) AS bill_count,
+           MIN(i.received_date) AS first_received_date
+    FROM inventory_items i
+    JOIN departments d ON d.id=i.department_id
+    WHERE i.chemical_form IS NOT NULL
+      AND i.batch_number IS NOT NULL
+      ${departmentFilter}
+    GROUP BY i.department_id,d.name,i.batch_number
+    ORDER BY i.batch_number ASC,d.name ASC
+  `, params);
+  return rows;
+}
+
+async function batchReceivingRecord(departmentId, batchNumber, user) {
+  const batch = String(batchNumber || '').trim();
+  if (!batch || batch.length > 100) throw new Error('INVALID_BATCH');
+
+  const scopedDepartmentId = isAdmin(user) ? Number(departmentId) : Number(user.department_id);
+  if (!Number.isInteger(scopedDepartmentId) || scopedDepartmentId <= 0) {
+    throw new Error('INVALID_DEPARTMENT');
+  }
+  if (!isAdmin(user) && scopedDepartmentId !== Number(user.department_id)) {
+    throw new Error('FORBIDDEN');
+  }
+
+  const [lines] = await db.query(`
+    SELECT i.id,i.asset_code,i.name,i.chemical_form,i.batch_number,
+           i.vendor_name,i.vendor_bill_no,i.received_date,i.received_by,
+           i.make_grade,i.manufacturer,i.expiry_date,i.location,
+           i.quantity,i.unit,i.container_capacity,i.container_unit,
+           d.name AS department,
+           COALESCE((
+             SELECT SUM(
+               CASE
+                 WHEN COALESCE(JSON_UNQUOTE(JSON_EXTRACT(t.details,'$.restock')),'false')='true' THEN 0
+                 ELSE t.quantity
+               END
+             )
+             FROM inventory_transactions t
+             WHERE t.inventory_id=i.id AND t.action='ADD'
+           ),i.quantity) AS quantity_received
+    FROM inventory_items i
+    JOIN departments d ON d.id=i.department_id
+    WHERE i.department_id=?
+      AND i.chemical_form IS NOT NULL
+      AND i.batch_number=?
+    ORDER BY i.name ASC,i.container_capacity ASC,i.container_unit ASC,i.id ASC
+  `, [scopedDepartmentId, batch]);
+  if (!lines.length) return null;
+
+  return {
+    department_id: scopedDepartmentId,
+    department: lines[0].department,
+    batch_number: batch,
+    lines
+  };
+}
+
 async function chemicalBatches(departmentId) {
   const [rows] = await db.query(`
     SELECT DISTINCT name,chemical_form,batch_number,manufacturer,expiry_date
@@ -573,6 +638,8 @@ async function transactionsForItem(user, inventoryId) {
 module.exports = {
   list,
   get,
+  batchReceivingRecords,
+  batchReceivingRecord,
   chemicalBatches,
   create,
   restock,
