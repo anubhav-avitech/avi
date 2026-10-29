@@ -20,7 +20,16 @@
 .purchase-details dl>div{min-width:0}
 .purchase-details dt{color:#9297a0;font-size:9px;text-transform:uppercase;letter-spacing:.05em}
 .purchase-details dd{margin:1px 0 0;overflow-wrap:anywhere;font-size:10px}
-.inventory-head-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.toolbar .button{white-space:nowrap}
+.assignments-page-head{justify-content:flex-end}
+.history-search{margin-top:0}
+.history-search-status{margin:-5px 0 10px;color:var(--muted);font-size:11px}
+.history-row[hidden]{display:none}
+.history-details{min-width:220px}
+.history-details dl{display:grid;gap:4px;margin:0}
+.history-details dl>div{display:grid;grid-template-columns:minmax(90px,auto) minmax(0,1fr);gap:8px}
+.history-details dt{color:var(--muted);font-size:10px}
+.history-details dd{margin:0;overflow-wrap:anywhere;font-size:11px}
 .batch-record-list{padding:8px 18px}
 .batch-record-card{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:15px 2px;border-bottom:1px solid var(--line)}
 .batch-record-card:last-child{border-bottom:0}

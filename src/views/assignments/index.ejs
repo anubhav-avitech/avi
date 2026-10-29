@@ -1,4 +1,4 @@
-<div class="page-head"><div><div class="eyebrow">CONTROL</div><h1>Assignments</h1><p class="muted"><%= user.role_name==='Administrator'?'Company-wide issue and return records.':'Track issues within your department.' %></p></div><% if(user.permissions.includes('ASSIGNMENT_CREATE')){ %><a class="primary button" href="/assignments/new">Issue stock</a><% } %></div>
+<div class="page-head assignments-page-head"><% if(user.permissions.includes('ASSIGNMENT_CREATE')){ %><a class="primary button" href="/assignments/new">Assign stock</a><% } %></div>
 <section class="card"><table><thead><tr><th>Item</th><th>Employee</th><th>Department</th><th>Issue date</th><th>Issued by</th><th>Quantity</th><th>State</th><th></th></tr></thead><tbody>
 <% if(!rows.length){ %><tr><td colspan="8" class="empty">No assignments yet.</td></tr><% } %>
 <% rows.forEach(r=>{ %><tr>

@@ -1,10 +1,7 @@
 <div class="page-head">
   <div>
-    <div class="eyebrow">INVENTORY DOCUMENTS</div>
-    <h1>Batch receiving records</h1>
-    <p class="muted">Each record groups all chemicals that share a batch number within a department.</p>
+    <p class="muted">Each record groups all chemicals that share a batch number.</p>
   </div>
-  <a class="secondary button" href="/inventory">Back to inventory</a>
 </div>
 <section class="card batch-record-list">
   <% if(!batches.length){ %>
@@ -13,7 +10,6 @@
     <% batches.forEach(batch=>{ %>
       <article class="batch-record-card">
         <div>
-          <div class="eyebrow"><%= batch.department %></div>
           <h2>Batch <%= batch.batch_number %></h2>
           <p class="muted"><%= batch.chemical_count %> chemicals · <%= batch.line_count %> stock lines<% if(batch.bill_count){ %> · <%= batch.bill_count %> vendor bills<% } %></p>
           <% if(batch.first_received_date){ %><small class="muted">First received <%= batch.first_received_date %></small><% } %>

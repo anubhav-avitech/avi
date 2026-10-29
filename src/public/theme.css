@@ -1,0 +1,245 @@
+.theme-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.theme-toggle-track {
+  position: relative;
+  display: block;
+  width: 56px;
+  height: 30px;
+  border: 1px solid #d5dbe5;
+  border-radius: 999px;
+  background: linear-gradient(110deg, #f8d878, #b8d7f4);
+  transition: background .35s ease, border-color .35s ease;
+}
+
+.theme-toggle-sun,
+.theme-toggle-moon {
+  position: absolute;
+  top: 4px;
+  width: 20px;
+  color: #fff;
+  font: 16px/20px Arial, sans-serif;
+  text-align: center;
+}
+
+.theme-toggle-sun {
+  left: 3px;
+}
+
+.theme-toggle-moon {
+  right: 3px;
+}
+
+.theme-toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border: 1px solid rgba(31, 35, 43, .12);
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(20, 24, 30, .2);
+  transition: transform .35s cubic-bezier(.2, .8, .2, 1), background .35s ease;
+}
+
+.profile .theme-toggle-track {
+  display: block;
+  flex-direction: initial;
+  text-align: initial;
+}
+
+.profile .theme-toggle-track > span {
+  display: block;
+  text-align: center;
+}
+
+.theme-toggle:focus-visible {
+  outline: 3px solid #7d9de8;
+  outline-offset: 3px;
+  border-radius: 999px;
+}
+
+.auth-theme-toggle {
+  position: fixed;
+  z-index: 10;
+  top: 18px;
+  right: 20px;
+}
+
+html[data-theme="night"] {
+  color-scheme: dark;
+  --bg: #10141b;
+  --panel: #191f29;
+  --text: #edf1f7;
+  --muted: #a2adbd;
+  --line: #303947;
+  --accent: #53689f;
+  --soft: #262e3b;
+  --danger: #ff9188;
+  --green: #83d6a5;
+  --amber: #f3cb72;
+}
+
+html[data-theme="night"] body {
+  background: var(--bg);
+}
+
+html[data-theme="night"] .topbar {
+  background: rgba(25, 31, 41, .94);
+}
+
+html[data-theme="night"] .brand {
+  background: #fff;
+  border-radius: 4px;
+}
+
+html[data-theme="night"] .login-card {
+  box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+}
+
+html[data-theme="night"] .secondary {
+  background: var(--panel);
+  color: var(--text);
+}
+
+html[data-theme="night"] th {
+  background: #202833;
+  color: var(--muted);
+}
+
+html[data-theme="night"] input,
+html[data-theme="night"] select,
+html[data-theme="night"] textarea {
+  background: #141a23;
+  border-color: var(--line);
+  color: var(--text);
+}
+
+html[data-theme="night"] input:focus,
+html[data-theme="night"] select:focus,
+html[data-theme="night"] textarea:focus {
+  border-color: #8398ce;
+  box-shadow: 0 0 0 3px rgba(131, 152, 206, .18);
+}
+
+html[data-theme="night"] label {
+  color: #d3dae5;
+}
+
+html[data-theme="night"] .status {
+  background: #303844;
+  color: #d6deea;
+}
+
+html[data-theme="night"] .status.available,
+html[data-theme="night"] .status.active,
+html[data-theme="night"] .status.returned {
+  background: #183728;
+  color: #91e0b0;
+}
+
+html[data-theme="night"] .status.assigned {
+  background: #40351d;
+  color: #f3cb72;
+}
+
+html[data-theme="night"] .status.inactive,
+html[data-theme="night"] .status.retired,
+html[data-theme="night"] .status.damaged,
+html[data-theme="night"] .status.lost {
+  background: #442725;
+  color: #ffaaa2;
+}
+
+html[data-theme="night"] .tag {
+  background: #303844;
+  color: #c9d2df;
+}
+
+html[data-theme="night"] .actions a,
+html[data-theme="night"] .link,
+html[data-theme="night"] .purchase-details summary {
+  color: #bdc7d6;
+}
+
+html[data-theme="night"] .flash {
+  background: #183728;
+  border-color: #28523a;
+  color: #a8e8bd;
+}
+
+html[data-theme="night"] .flash.error {
+  background: #442725;
+  border-color: #673832;
+  color: #ffaaa2;
+}
+
+html[data-theme="night"] .item-reference {
+  color: #bdc7d6;
+}
+
+html[data-theme="night"] .chemical-summary span,
+html[data-theme="night"] .stock-unit-total {
+  background: #202833;
+}
+
+html[data-theme="night"] .expiry-alert-card {
+  border-color: #594b2e;
+}
+
+html[data-theme="night"] .expiry-alert-head {
+  background: #242317;
+}
+
+html[data-theme="night"] .expiry-alert-head > a {
+  color: #c4cedc;
+}
+
+html[data-theme="night"] .expiry-badge.upcoming {
+  background: #40351d;
+  color: #f3cb72;
+}
+
+html[data-theme="night"] .expiry-badge.urgent,
+html[data-theme="night"] .expiry-badge.expired {
+  background: #442725;
+  color: #ffaaa2;
+}
+
+html[data-theme="night"] .retire-dialog {
+  background: var(--panel);
+}
+
+html[data-theme="night"] .receiving-record-signatures > div {
+  border-color: #697586;
+}
+
+html[data-theme="night"] code {
+  color: #bdc7d6;
+}
+
+html[data-theme="night"] .theme-toggle-track {
+  border-color: #53617b;
+  background: linear-gradient(110deg, #303f60, #222b40);
+}
+
+html[data-theme="night"] .theme-toggle-thumb {
+  transform: translateX(26px);
+  background: #edf1f7;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle-track,
+  .theme-toggle-thumb {
+    transition: none;
+  }
+}
