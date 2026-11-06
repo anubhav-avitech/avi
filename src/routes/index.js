@@ -5,9 +5,8 @@ const auth = require('../services/auth.service');
 const inventory = require('../services/inventory.service');
 const users = require('../services/user.service');
 const employeeDirectory = require('../services/employee.service');
-const departments = require('../services/department.service');
 const { dashboard } = require('../services/dashboard.service');
-const { requireAuth, requirePermission, requireAdmin, requireDepartmentUser } = require('../middleware/auth');
+const { requireAuth, requirePermission, requireAdmin } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/security');
 
 const setFlash = (req, msg, type = 'success') => {
@@ -30,18 +29,14 @@ router.post('/login', loginLimiter, async (req, res, next) => {
         error: 'Invalid email or password.'
       });
     }
-
     req.session.regenerate(err => {
       if (err) return next(err);
       req.session.user = {
         id: user.id,
         name: user.name,
         email: user.email,
-        department_id: user.department_id,
         role_id: user.role_id,
         role_name: user.role_name,
-        department_name: user.department_name,
-        role_scope: user.scope,
         permissions: user.permissions
       };
       req.session.save(saveErr => {
@@ -71,17 +66,11 @@ router.get('/', requireAuth, requirePermission('DASHBOARD_VIEW'), async (req, re
 
 router.get('/inventory', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
   try {
-    const items = await inventory.list(req.session.user, req.query.q, req.query.department_id);
-    const deps = req.session.user.role_scope === 'ALL'
-      ? await departments.list()
-      : await db.query('SELECT id,name,status FROM departments WHERE id=?', [req.session.user.department_id]).then(([rows]) => rows);
-
+    const items = await inventory.list(req.session.user, req.query.q);
     res.render('inventory/index', {
       title: 'Inventory',
       items,
-      deps,
-      query: req.query.q || '',
-      selected: req.query.department_id || ''
+      query: req.query.q || ''
     });
   } catch (error) {
     next(error);
@@ -92,7 +81,7 @@ router.get('/inventory/batches', requireAuth, requirePermission('INVENTORY_VIEW'
   try {
     res.render('inventory/batches', {
       title: 'Batch receiving records',
-      batches: await inventory.batchReceivingRecords(req.session.user)
+      batches: await inventory.batchReceivingRecords()
     });
   } catch (error) {
     next(error);
@@ -102,9 +91,7 @@ router.get('/inventory/batches', requireAuth, requirePermission('INVENTORY_VIEW'
 router.get('/inventory/batches/receiving-record', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
   try {
     const record = await inventory.batchReceivingRecord(
-      req.query.department_id,
-      req.query.batch_number,
-      req.session.user
+      req.query.batch_number
     );
     if (!record) return res.status(404).render('errors/404', { title: 'Not found' });
     res.render('inventory/receiving-record', {
@@ -113,7 +100,7 @@ router.get('/inventory/batches/receiving-record', requireAuth, requirePermission
       preparedBy: req.session.user.name
     });
   } catch (error) {
-    if (error.message === 'INVALID_BATCH' || error.message === 'INVALID_DEPARTMENT') {
+    if (error.message === 'INVALID_BATCH') {
       return res.status(404).render('errors/404', { title: 'Not found' });
     }
     if (error.message === 'FORBIDDEN') {
@@ -123,17 +110,12 @@ router.get('/inventory/batches/receiving-record', requireAuth, requirePermission
   }
 });
 
-router.get('/inventory/new', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
+router.get('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
   try {
-    const deps = req.session.user.role_scope === 'ALL'
-      ? await departments.list()
-      : await db.query('SELECT id,name,status FROM departments WHERE id=? AND status=\'ACTIVE\'', [req.session.user.department_id]).then(([rows]) => rows);
-
     res.render('inventory/form', {
       title: 'Add inventory',
       item: null,
-      deps,
-      batches: await inventory.chemicalBatches(req.session.user.department_id),
+      batches: await inventory.chemicalBatches(),
       action: '/inventory/new'
     });
   } catch (error) {
@@ -141,7 +123,7 @@ router.get('/inventory/new', requireAuth, requireDepartmentUser, requirePermissi
   }
 });
 
-router.post('/inventory/new', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
+router.post('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
   try {
     await inventory.create(req.body, req.session.user);
     setFlash(req, 'Inventory item created.');
@@ -151,11 +133,15 @@ router.post('/inventory/new', requireAuth, requireDepartmentUser, requirePermiss
       setFlash(req, 'Asset code or serial number already exists.', 'error');
       return res.redirect('/inventory/new');
     }
-    if (['FORBIDDEN', 'INVALID_DEPARTMENT'].includes(error.message)) {
+    if (error.message === 'FORBIDDEN') {
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
     if (error.message === 'INVALID_QUANTITY') {
       setFlash(req, 'Quantity must be greater than zero.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_MINIMUM_STOCK' || error.message === 'INVALID_ITEM_NAME') {
+      setFlash(req, 'Enter a valid product name and non-negative minimum stock threshold.', 'error');
       return res.redirect('/inventory/new');
     }
     if (error.message === 'INVALID_CHEMICAL') {
@@ -166,10 +152,10 @@ router.post('/inventory/new', requireAuth, requireDepartmentUser, requirePermiss
   }
 });
 
-router.get('/inventory/:id/restock', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
+router.get('/inventory/:id/restock', requireAuth, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
   try {
     const item = await inventory.get(req.params.id);
-    if (!item || !inventory.canAccess(req.session.user, item)) {
+    if (!item) {
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
     res.render('inventory/restock', {
@@ -182,7 +168,7 @@ router.get('/inventory/:id/restock', requireAuth, requireDepartmentUser, require
   }
 });
 
-router.post('/inventory/:id/restock', requireAuth, requireDepartmentUser, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
+router.post('/inventory/:id/restock', requireAuth, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
   try {
     await inventory.restock(req.params.id, req.body.quantity, req.session.user);
     setFlash(req, 'Stock quantity added.');
@@ -190,6 +176,10 @@ router.post('/inventory/:id/restock', requireAuth, requireDepartmentUser, requir
   } catch (error) {
     if (error.message === 'INVALID_QUANTITY') {
       setFlash(req, 'Enter a valid quantity. Chemical stock must be entered as whole containers.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/restock`);
+    }
+    if (error.message === 'STOCK_LIMIT') {
+      setFlash(req, 'Stock quantity exceeds the maximum supported amount.', 'error');
       return res.redirect(`/inventory/${req.params.id}/restock`);
     }
     if (error.message === 'RETIRED_ITEM') {
@@ -207,21 +197,59 @@ router.post('/inventory/:id/restock', requireAuth, requireDepartmentUser, requir
   }
 });
 
+router.post('/inventory/:id/adjust', requireAuth, requirePermission('INVENTORY_UPDATE'), async (req, res, next) => {
+  try {
+    await inventory.adjustStock(req.params.id, req.body.delta, req.body.note, req.session.user);
+    setFlash(req, 'Stock adjustment recorded.');
+    res.redirect(`/inventory/${req.params.id}/edit`);
+  } catch (error) {
+    const messages = {
+      INSUFFICIENT: 'Adjustment cannot reduce central stock below zero.',
+      STOCK_LIMIT: 'Adjustment exceeds the maximum supported stock quantity.',
+      INVALID_QUANTITY: 'Enter a non-zero valid adjustment. Chemical quantities must be whole containers.',
+      INVALID_REMARKS: 'Enter a reason of 500 characters or fewer.',
+      NOT_FOUND: 'Inventory item not found.',
+      RETIRED_ITEM: 'Retired stock cannot be adjusted.'
+    };
+    if (messages[error.message]) {
+      setFlash(req, messages[error.message], 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    next(error);
+  }
+});
+
+router.post('/inventory/:id/dispose', requireAuth, requirePermission('INVENTORY_UPDATE'), async (req, res, next) => {
+  try {
+    await inventory.disposeStock(req.params.id, req.body.quantity, req.body.note, req.session.user);
+    setFlash(req, 'Stock disposal recorded.');
+    res.redirect(`/inventory/${req.params.id}/edit`);
+  } catch (error) {
+    const messages = {
+      INSUFFICIENT: 'Disposal quantity exceeds central stock.',
+      INVALID_QUANTITY: 'Enter a valid disposal quantity.',
+      INVALID_REMARKS: 'Enter a reason of 500 characters or fewer.',
+      NOT_FOUND: 'Inventory item not found.',
+      RETIRED_ITEM: 'Retired stock cannot be disposed.'
+    };
+    if (messages[error.message]) {
+      setFlash(req, messages[error.message], 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    next(error);
+  }
+});
+
 router.get('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPDATE'), async (req, res, next) => {
   try {
     const item = await inventory.get(req.params.id);
-    if (!item || !inventory.canAccess(req.session.user, item)) {
+    if (!item) {
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
-
-    const deps = req.session.user.role_scope === 'ALL'
-      ? await departments.list()
-      : await db.query('SELECT id,name,status FROM departments WHERE id=?', [req.session.user.department_id]).then(([rows]) => rows);
 
     res.render('inventory/form', {
       title: 'Edit inventory',
       item,
-      deps,
       batches: [],
       action: `/inventory/${item.id}/edit`
     });
@@ -249,8 +277,20 @@ router.post('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPD
       setFlash(req, 'An inventory record cannot be changed between chemical and non-chemical stock.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
+    if (error.message === 'ITEM_TYPE_IMMUTABLE') {
+      setFlash(req, 'Inventory type cannot be changed after stock has been assigned.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'ITEM_UNIT_IMMUTABLE') {
+      setFlash(req, 'Stock unit cannot be changed after an inventory record is created.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
     if (error.message === 'CHEMICAL_STOCK_METADATA_LOCKED') {
       setFlash(req, 'Chemical name, batch, expiry and container details cannot be changed after stock has been issued. Add a new stock line for a different batch or size.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'INVALID_MINIMUM_STOCK' || error.message === 'INVALID_ITEM_NAME') {
+      setFlash(req, 'Enter a valid product name and non-negative minimum stock threshold.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
     if (error.code === 'ER_DUP_ENTRY') {
@@ -279,7 +319,7 @@ router.post('/inventory/:id/retire', requireAuth, requirePermission('INVENTORY_D
 router.get('/inventory/:id/history', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
   try {
     const item = await inventory.get(req.params.id);
-    if (!item || !inventory.canAccess(req.session.user, item)) {
+    if (!item) {
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
 
@@ -305,27 +345,33 @@ router.get('/history', requireAuth, requirePermission('INVENTORY_VIEW'), async (
 
 router.get('/assignments', requireAuth, async (req, res, next) => {
   try {
-    if (!['Administrator', 'Department User'].includes(req.session.user.role_name) ||
-        (!req.session.user.permissions.includes('ASSIGNMENT_CREATE') && !req.session.user.permissions.includes('ASSIGNMENT_RETURN'))) {
+    if (!['Administrator', 'Inventory User'].includes(req.session.user.role_name) ||
+        (!req.session.user.permissions.includes('ASSIGNMENT_CREATE') &&
+         !req.session.user.permissions.includes('ASSIGNMENT_RETURN') &&
+         !req.session.user.permissions.includes('ASSIGNMENT_CONSUME'))) {
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
     res.render('assignments/index', {
       title: 'Assignments',
-      rows: await inventory.assignments(req.session.user)
+      rows: await inventory.assignments(req.session.user, req.query.employee_id)
     });
   } catch (error) {
+    if (error.message === 'INVALID_EMPLOYEE') {
+      setFlash(req, 'Select a valid employee filter.', 'error');
+      return res.redirect('/assignments');
+    }
     next(error);
   }
 });
 
-router.get('/employees/new', requireAuth, requireDepartmentUser, requirePermission('ASSIGNMENT_CREATE'), (req, res) => {
-  res.render('employees/form', { title: 'Add person' });
+router.get('/employees/new', requireAuth, requirePermission('ASSIGNMENT_CREATE'), (req, res) => {
+  res.render('employees/form', { title: 'Add employee' });
 });
 
-router.post('/employees/new', requireAuth, requireDepartmentUser, requirePermission('ASSIGNMENT_CREATE'), async (req, res, next) => {
+router.post('/employees/new', requireAuth, requirePermission('ASSIGNMENT_CREATE'), async (req, res, next) => {
   try {
     await employeeDirectory.create(req.body, req.session.user);
-    setFlash(req, 'Person added. You can assign inventory now.');
+    setFlash(req, 'Employee added. You can assign inventory now.');
     res.redirect('/assignments/new');
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
@@ -340,14 +386,13 @@ router.post('/employees/new', requireAuth, requireDepartmentUser, requirePermiss
   }
 });
 
-router.get('/assignments/new', requireAuth, requireDepartmentUser, requirePermission('ASSIGNMENT_CREATE'), async (req, res, next) => {
+router.get('/assignments/new', requireAuth, requirePermission('ASSIGNMENT_CREATE'), async (req, res, next) => {
   try {
     const items = await inventory.list(req.session.user);
-    const eligibleEmployees = await employeeDirectory.listForDepartment(req.session.user.department_id);
     res.render('assignments/form', {
       title: 'Assign inventory',
-      items: items.filter(item => item.status === 'AVAILABLE' && Number(item.quantity) > 0),
-      employees: eligibleEmployees,
+      items: items.filter(item => item.status === 'AVAILABLE' && !item.expired && Number(item.quantity) > 0),
+      employees: await employeeDirectory.listActive(),
       action: '/assignments/new'
     });
   } catch (error) {
@@ -355,22 +400,46 @@ router.get('/assignments/new', requireAuth, requireDepartmentUser, requirePermis
   }
 });
 
-router.post('/assignments/new', requireAuth, requireDepartmentUser, requirePermission('ASSIGNMENT_CREATE'), async (req, res, next) => {
+router.post('/assignments/new', requireAuth, requirePermission('ASSIGNMENT_CREATE'), async (req, res, next) => {
   try {
-    await inventory.assign(req.body.inventory_id, req.body.employee_id, req.body.quantity, req.session.user);
+    await inventory.assign(req.body.inventory_id, req.body.employee_id, req.body.quantity, req.body.remarks, req.session.user);
     setFlash(req, 'Inventory assigned successfully.');
     res.redirect('/assignments');
   } catch (error) {
     const messages = {
       FORBIDDEN: 'You cannot access this inventory.',
       INVALID_EMPLOYEE: 'Selected employee is not active.',
-      CROSS_DEPARTMENT: 'Inventory can only be assigned within the same department.',
       INSUFFICIENT: 'Not enough available quantity.',
       NOT_FOUND: 'Inventory item not found.',
-      INVALID_QUANTITY: 'Enter a valid quantity. Chemical stock must be issued as whole containers.'
+      INVALID_QUANTITY: 'Enter a valid quantity. Chemical stock must be issued as whole containers.',
+      INVALID_REMARKS: 'Remarks must be 500 characters or fewer.'
     };
-    setFlash(req, messages[error.message] || 'Assignment could not be completed.', 'error');
-    res.redirect('/assignments/new');
+    if (messages[error.message]) {
+      setFlash(req, messages[error.message], 'error');
+      return res.redirect('/assignments/new');
+    }
+    next(error);
+  }
+});
+
+router.post('/assignments/:id/consume', requireAuth, requirePermission('ASSIGNMENT_CONSUME'), async (req, res, next) => {
+  try {
+    await inventory.consumeAssignment(req.params.id, req.body.quantity, req.body.note, req.session.user);
+    setFlash(req, 'Consumption recorded.');
+    res.redirect('/assignments');
+  } catch (error) {
+    const messages = {
+      INVALID_CONSUMPTION: 'Consumption cannot exceed the employee’s remaining balance.',
+      INVALID_QUANTITY: 'Enter a valid quantity.',
+      INVALID_REMARKS: 'Remarks must be 500 characters or fewer.',
+      NOT_CONSUMABLE: 'Only consumables can be recorded as consumed.',
+      NOT_FOUND: 'Assignment not found.'
+    };
+    if (messages[error.message]) {
+      setFlash(req, messages[error.message], 'error');
+      return res.redirect('/assignments');
+    }
+    next(error);
   }
 });
 
@@ -384,17 +453,20 @@ router.post('/assignments/:id/return', requireAuth, requirePermission('ASSIGNMEN
       FORBIDDEN: 'You cannot access this assignment.',
       INVALID_RETURN: 'Return quantity is invalid.',
       INVALID_QUANTITY: 'Quantity must be greater than zero.',
-      CHEMICAL_RETURN_ADMIN_ONLY: 'Only administrators can record chemical returns.',
-      CHEMICAL_RETURN_NOTE_REQUIRED: 'Enter a note explaining this exceptional chemical return.',
-      INVALID_RETURN_NOTE: 'Return note must be 500 characters or fewer.',
+      STOCK_LIMIT: 'The return would exceed the maximum supported central stock quantity.',
+      NOT_RETURNABLE: 'Only assigned equipment/assets can be returned.',
+      INVALID_REMARKS: 'Remarks must be 500 characters or fewer.',
       NOT_FOUND: 'Assignment is no longer active.'
     };
-    setFlash(req, messages[error.message] || 'Return could not be completed.', 'error');
-    res.redirect('/assignments');
+    if (messages[error.message]) {
+      setFlash(req, messages[error.message], 'error');
+      return res.redirect('/assignments');
+    }
+    next(error);
   }
 });
 
-// User, department and audit administration are administrator-only.
+// User and audit administration remain administrator-only.
 router.get('/users', requireAuth, requireAdmin, requirePermission('USERS_VIEW'), async (req, res, next) => {
   try {
     res.render('users/index', { title: 'Users', rows: await users.list(req.session.user) });
@@ -405,8 +477,7 @@ router.get('/users', requireAuth, requireAdmin, requirePermission('USERS_VIEW'),
 
 router.get('/users/new', requireAuth, requireAdmin, requirePermission('USERS_MANAGE'), async (req, res, next) => {
   try {
-    const options = await users.options();
-    res.render('users/form', { title: 'Add user', person: null, ...options });
+    res.render('users/form', { title: 'Add user', person: null });
   } catch (error) {
     next(error);
   }
@@ -422,12 +493,8 @@ router.post('/users/new', requireAuth, requireAdmin, requirePermission('USERS_MA
       setFlash(req, 'Employee code or email already exists.', 'error');
       return res.redirect('/users/new');
     }
-    if (error.message === 'DEPARTMENT_REQUIRED') {
-      setFlash(req, 'Select a department for the new user.', 'error');
-      return res.redirect('/users/new');
-    }
-    if (error.message === 'DEPARTMENT_ROLE_UNAVAILABLE') {
-      setFlash(req, 'Department access is not configured. Contact the administrator.', 'error');
+    if (error.message === 'INVENTORY_ROLE_UNAVAILABLE') {
+      setFlash(req, 'The employee role is not configured. Contact the administrator.', 'error');
       return res.redirect('/users/new');
     }
     next(error);
@@ -442,8 +509,7 @@ router.get('/users/:id/edit', requireAuth, requireAdmin, requirePermission('USER
       WHERE u.id=?
     `, [req.params.id]);
     if (!rows.length) return res.status(404).render('errors/404', { title: 'Not found' });
-    const options = await users.options();
-    res.render('users/form', { title: 'Edit user', person: rows[0], ...options });
+    res.render('users/form', { title: 'Edit user', person: rows[0] });
   } catch (error) {
     next(error);
   }
@@ -457,14 +523,6 @@ router.post('/users/:id/edit', requireAuth, requireAdmin, requirePermission('USE
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
       setFlash(req, 'Employee code or email already exists.', 'error');
-      return res.redirect(`/users/${req.params.id}/edit`);
-    }
-    if (error.message === 'ADMIN_DEPARTMENT') {
-      setFlash(req, 'Administrators must not be assigned to a department.', 'error');
-      return res.redirect(`/users/${req.params.id}/edit`);
-    }
-    if (error.message === 'DEPARTMENT_REQUIRED') {
-      setFlash(req, 'Department is required for a Department User.', 'error');
       return res.redirect(`/users/${req.params.id}/edit`);
     }
     next(error);
@@ -486,14 +544,6 @@ router.post('/users/:id/delete', requireAuth, requireAdmin, requirePermission('U
       setFlash(req, messages[error.message], 'error');
       return res.redirect('/users');
     }
-    next(error);
-  }
-});
-
-router.get('/departments', requireAuth, requireAdmin, async (req, res, next) => {
-  try {
-    res.render('departments/index', { title: 'Departments', rows: await departments.list() });
-  } catch (error) {
     next(error);
   }
 });

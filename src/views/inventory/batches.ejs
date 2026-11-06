@@ -14,7 +14,7 @@
           <p class="muted"><%= batch.chemical_count %> chemicals · <%= batch.line_count %> stock lines<% if(batch.bill_count){ %> · <%= batch.bill_count %> vendor bills<% } %></p>
           <% if(batch.first_received_date){ %><small class="muted">First received <%= batch.first_received_date %></small><% } %>
         </div>
-        <a class="primary button" href="/inventory/batches/receiving-record?department_id=<%= batch.department_id %>&batch_number=<%= encodeURIComponent(batch.batch_number) %>">Open batch record</a>
+        <a class="primary button" href="/inventory/batches/receiving-record?batch_number=<%= encodeURIComponent(batch.batch_number) %>">Open batch record</a>
       </article>
     <% }) %>
   <% } %>

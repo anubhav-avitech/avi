@@ -1,10 +1,44 @@
-<div class="page-head assignments-page-head"><% if(user.permissions.includes('ASSIGNMENT_CREATE')){ %><a class="primary button" href="/assignments/new">Assign stock</a><% } %></div>
-<section class="card"><table><thead><tr><th>Item</th><th>Employee</th><th>Department</th><th>Issue date</th><th>Issued by</th><th>Quantity</th><th>State</th><th></th></tr></thead><tbody>
-<% if(!rows.length){ %><tr><td colspan="8" class="empty">No assignments yet.</td></tr><% } %>
-<% rows.forEach(r=>{ %><tr>
-<td><strong><%= r.item_name %></strong><small><%= r.asset_code %><% if(r.chemical_form){ %> · <%= r.chemical_form.toLowerCase() %> · batch <%= r.batch_number %> · expires <%= r.expiry_date %> · <%= r.container_capacity %> <%= r.container_unit %> each<% } %></small></td>
-<td><strong><%= r.user_name %></strong><small><%= r.employee_code %></small></td>
-<td><%= r.department %></td><td><%= r.assigned_at %></td><td><%= r.assigned_by_name %></td><td><%= r.quantity %> <%= r.unit %><% if(r.chemical_form){ %><small><%= r.quantity*r.container_capacity %> <%= r.container_unit %> issued</small><% } %></td>
-<td><% if(r.returned_at){ %><span class="status returned">RETURNED</span><small><%= r.returned_at %></small><% }else{ %><span class="status assigned">ACTIVE</span><% } %></td>
-<td><% if(!r.returned_at&&user.permissions.includes('ASSIGNMENT_RETURN')&&(user.role_name==='Administrator'||!r.chemical_form)){ %><form method="post" action="/assignments/<%= r.id %>/return" class="inline-return"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><input type="number" step="<%= r.chemical_form?'1':'0.001' %>" min="<%= r.chemical_form?'1':'0.001' %>" max="<%= r.quantity %>" name="quantity" value="<%= r.quantity %>" required><input name="note" placeholder="<%= r.chemical_form?'Required exception note':'Return note' %>" <%= r.chemical_form?'required':'' %>><button class="secondary">Return</button></form><% } else if(!r.returned_at&&r.chemical_form){ %><span class="muted">Chemical stock is treated as consumed.</span><% } %></td>
-</tr><% if(r.chemical_form){ %><tr><td colspan="8" class="muted"><small>Code: <%= r.asset_code %> · Batch: <%= r.batch_number || '—' %> · Expiry after receiving: <%= r.expiry_date || '—' %> · Issued by: <%= r.assigned_by_name || '—' %> · Issued to: <%= r.user_name || '—' %> · Balance after issue: <%= r.quantity %> containers</small></td></tr><% } %><% }) %></tbody></table></section>
+<div class="page-head assignments-page-head">
+  <div>
+    <div class="eyebrow">EMPLOYEE STOCK BALANCES</div>
+    <h1>Assignments</h1>
+    <p class="muted">Issued quantities and each employee’s remaining balance.</p>
+  </div>
+  <% if(user.permissions.includes('ASSIGNMENT_CREATE')){ %><a class="primary button" href="/assignments/new">Assign stock</a><% } %>
+</div>
+<section class="card">
+  <table>
+    <thead><tr><th>Item</th><th>Employee</th><th>Assigned</th><th>Remaining</th><th>Issued by</th><th>Issue date</th><th>Remarks</th><th>Actions</th></tr></thead>
+    <tbody>
+      <% if(!rows.length){ %><tr><td colspan="8" class="empty">No assignments yet.</td></tr><% } %>
+      <% rows.forEach(r=>{ const balance=Number(r.remaining_quantity); %>
+        <tr>
+          <td><strong><%= r.item_name %></strong><small><%= r.asset_code %><% if(r.chemical_form){ %> · <%= r.chemical_form.toLowerCase() %> · batch <%= r.batch_number||'—' %> · expires <%= r.expiry_date||'—' %><% } %></small></td>
+          <td><strong><%= r.employee_name||'Deleted employee' %></strong><small><%= r.employee_code||'—' %></small></td>
+          <td><%= Number(r.quantity).toLocaleString() %> <%= r.unit %></td>
+          <td><strong><%= balance.toLocaleString() %> <%= r.unit %></strong><small><%= balance>0?'Outstanding':'Closed' %></small></td>
+          <td><%= r.assigned_by_name %></td>
+          <td><%= r.assigned_at %></td>
+          <td><%= r.remarks||'—' %></td>
+          <td class="assignment-actions">
+            <% if(balance>0&&r.item_type==='CONSUMABLE'&&user.permissions.includes('ASSIGNMENT_CONSUME')){ %>
+              <form method="post" action="/assignments/<%= r.id %>/consume" class="movement-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <label>Consume<input type="number" step="<%= r.chemical_form?'1':'0.001' %>" min="<%= r.chemical_form?'1':'0.001' %>" max="<%= balance %>" name="quantity" required></label>
+                <label>Note<input name="note" maxlength="500" placeholder="Optional note"></label>
+                <button class="secondary">Record consumption</button>
+              </form>
+            <% } else if(balance>0&&r.item_type==='ASSET'&&!r.chemical_form&&user.permissions.includes('ASSIGNMENT_RETURN')){ %>
+              <form method="post" action="/assignments/<%= r.id %>/return" class="movement-form">
+                <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+                <label>Return quantity<input type="number" step="<%= r.chemical_form?'1':'0.001' %>" min="<%= r.chemical_form?'1':'0.001' %>" max="<%= balance %>" name="quantity" required></label>
+                <label>Note<input name="note" maxlength="500" placeholder="Optional note"></label>
+                <button class="secondary">Record return</button>
+              </form>
+            <% } %>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>

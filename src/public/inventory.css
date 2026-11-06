@@ -86,3 +86,58 @@
 .stock-unit-total small{color:var(--muted);font-size:10px}
 @media(max-width:900px){.inventory-table-card{overflow-x:auto}}
 @media(max-width:600px){.batch-record-card{align-items:flex-start;flex-direction:column}.receiving-record{padding:16px}.receiving-record-header,.receiving-record-footer{flex-direction:column}.receiving-record-reference{text-align:left}.receiving-record-footer p{max-width:none}.receiving-record-signatures{grid-template-columns:1fr;gap:38px}}
+.overview-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 16px}
+.overview-heading h1{margin:0;font-size:25px}
+.overview-heading .button{padding:7px 11px}
+.overview-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px}
+.overview-stat{display:flex;min-width:0;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--text);text-decoration:none;transition:border-color .15s}
+.overview-stat:hover{border-color:#9ca3af}
+.overview-stat>span{font-size:11px;color:var(--muted)}
+.overview-stat>strong{font-size:22px;line-height:1;letter-spacing:-.04em}
+.overview-stat-critical{border-color:#e9b5b1;background:#fffafa}
+.overview-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin-bottom:12px}
+.overview-grid:last-child{margin-bottom:0}
+.overview-card{min-width:0;overflow:hidden}
+.overview-card-head{display:flex;min-height:42px;align-items:center;justify-content:space-between;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.overview-card-head h2{margin:0;font-size:13px}
+.overview-card-head>a{flex:0 0 auto;color:var(--muted);font-size:10px;text-decoration:none}
+.overview-card-head>a:hover{color:var(--text);text-decoration:underline}
+.overview-unit-list{display:flex;flex-wrap:wrap;gap:0 24px;padding:3px 14px}
+.overview-unit{display:flex;min-width:100px;align-items:baseline;justify-content:space-between;gap:14px;padding:9px 0}
+.overview-unit span{font-size:11px;color:var(--muted)}
+.overview-unit strong{font-size:15px;font-weight:700}
+.overview-empty{padding:13px 14px;color:var(--muted);font-size:11px}
+.overview-list{padding:0 14px}
+.overview-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:12px;min-height:48px;padding:7px 0;border-bottom:1px solid var(--line);color:var(--text);text-decoration:none}
+.overview-row:last-child{border-bottom:0}
+.overview-row:hover .overview-row-main strong{text-decoration:underline}
+.overview-row-main{display:block;min-width:0}
+.overview-row-main strong,.overview-row-value strong{display:block;overflow:hidden;font-size:11px;text-overflow:ellipsis;white-space:nowrap}
+.overview-row-main small,.overview-row-value small{display:block;margin-top:2px;color:var(--muted);font-size:9px}
+.overview-row-value{text-align:right;white-space:nowrap}
+.overview-pill{display:inline-flex;align-items:center;justify-content:center;min-width:36px;padding:4px 7px;border-radius:999px;font-size:9px;font-weight:750;white-space:nowrap}
+.low-stock-status,.expiry-badge.warning,.expiry-badge.upcoming{background:#fff4d9;color:var(--amber)}
+.expiry-badge.critical,.expiry-badge.urgent{background:#fbeaea;color:var(--danger)}
+.overview-expiry-row{grid-template-columns:minmax(0,1fr) auto auto}
+.overview-balance-row{grid-template-columns:minmax(0,1fr) auto}
+.overview-activity-row{grid-template-columns:8px minmax(0,1fr) auto}
+.activity-mark{width:7px;height:7px;border-radius:50%;background:#7b8492}
+.activity-mark.assign,.activity-mark.add{background:var(--green)}
+.activity-mark.consume,.activity-mark.dispose{background:var(--danger)}
+.activity-mark.return,.activity-mark.adjust{background:var(--amber)}
+.stock-maintenance-card{margin-top:16px;padding-bottom:16px}
+.stock-maintenance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;padding:16px}
+.stock-maintenance-grid h3{margin:0;font-size:12px}
+.stock-maintenance-grid .danger{color:var(--danger)!important}
+.assignment-actions{min-width:190px}
+.movement-form{display:grid;gap:5px;margin:0 0 7px}
+.movement-form label{font-size:9px}
+.movement-form input{padding:6px 7px;font-size:10px}
+.movement-form button{font-size:10px}
+.low-stock-tag{display:flex;width:max-content;margin-top:5px;background:#fff4d9;color:var(--amber)}
+html[data-theme="night"] .overview-stat-critical{background:#291e22}
+html[data-theme="night"] .low-stock-status,html[data-theme="night"] .expiry-badge.warning,html[data-theme="night"] .expiry-badge.upcoming{background:#40351d;color:#f3cb72}
+html[data-theme="night"] .expiry-badge.critical,html[data-theme="night"] .expiry-badge.urgent{background:#442725;color:#ffaaa2}
+@media(max-width:1000px){.overview-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}}
+@media(max-width:700px){.overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-stat{padding:10px 11px}.overview-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}.overview-pill{grid-column:2;grid-row:1 / span 2;justify-self:end}.overview-row-value{grid-column:2}.overview-expiry-row .overview-row-value{grid-column:1;grid-row:2;text-align:left}.overview-expiry-row .overview-pill{grid-column:2;grid-row:1 / span 2}.stock-maintenance-grid{grid-template-columns:1fr}}
+@media(max-width:420px){.overview-heading h1{font-size:22px}.overview-stat{align-items:flex-start;flex-direction:column;gap:5px}.overview-stat>strong{font-size:20px}}

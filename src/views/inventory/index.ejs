@@ -1,15 +1,7 @@
 <form class="toolbar" method="get">
   <input name="q" value="<%= query %>" placeholder="Search stock, batch, vendor or name…">
-  <% if(user.role_scope==='ALL'){ %>
-    <select name="department_id">
-      <option value="">All departments</option>
-      <% deps.filter(d=>d.status==='ACTIVE').forEach(d=>{ %>
-        <option value="<%= d.id %>" <%= String(selected)===String(d.id)?'selected':'' %>><%= d.name %></option>
-      <% }) %>
-    </select>
-  <% } %>
   <button class="secondary">Search</button>
-  <% if(user.role_name==='Department User'&&user.permissions.includes('INVENTORY_CREATE')){ %>
+  <% if(user.permissions.includes('INVENTORY_CREATE')){ %>
     <a class="primary button" href="/inventory/new">Add item</a>
   <% } %>
 </form>
@@ -45,17 +37,19 @@
                 </dl>
               </details>
             <% } %>
+            <% if(Number(i.minimum_stock)>0&&Number(i.product_available_quantity)<=Number(i.minimum_stock)){ %><span class="tag low-stock-tag">LOW STOCK · product available <%= i.product_available_quantity %> <%= i.unit %></span><% } %>
             <% if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<0){ %><span class="tag">EXPIRED</span><% }else if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<=30){ %><span class="tag"><%= daysToExpiry===0?'EXPIRES TODAY':`EXPIRING IN ${daysToExpiry} DAYS` %></span><% } %>
           </td>
           <td><span class="tag"><%= i.chemical_form?'CHEMICAL':i.item_type %></span></td>
           <td>
             <strong><%= i.quantity %> <%= i.unit %></strong>
+            <small>Minimum: <%= i.minimum_stock %> <%= i.unit %></small>
             <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> each · total left <%= Number(i.quantity*i.container_capacity).toLocaleString() %> <%= i.container_unit %></small><% } %>
           </td>
           <td><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td>
           <td class="actions">
             <a href="/inventory/<%= i.id %>/history">History</a>
-            <% if(user.permissions.includes('INVENTORY_CREATE')&&user.role_name==='Department User'&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/restock">Add stock</a><% } %>
+            <% if(user.permissions.includes('INVENTORY_CREATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/restock">Add stock</a><% } %>
             <% if(user.permissions.includes('INVENTORY_UPDATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/edit">Edit</a><% } %>
             <% if(user.permissions.includes('INVENTORY_DELETE')&&i.status!=='RETIRED'){ %>
               <form method="post" action="/inventory/<%= i.id %>/retire" data-item-name="<%= i.name %>"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Retire</button></form>

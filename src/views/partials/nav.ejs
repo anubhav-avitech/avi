@@ -7,7 +7,7 @@
       <a class="<%= path.startsWith('/inventory/batches')?'active':'' %>" href="/inventory/batches">Batch receiving records</a>
       <a class="<%= path.startsWith('/history')?'active':'' %>" href="/history">History</a>
     <% } %>
-    <% if((user.role_name==='Department User'||user.role_name==='Administrator')&&(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN'))){ %>
+    <% if((user.role_name==='Inventory User'||user.role_name==='Administrator')&&(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN')||user.permissions.includes('ASSIGNMENT_CONSUME'))){ %>
       <a class="<%= path.startsWith('/assignments')?'active':'' %>" href="/assignments">Assignments</a>
     <% } %>
     <% if(user.role_name==='Administrator'){ %>

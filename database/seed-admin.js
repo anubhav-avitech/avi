@@ -8,7 +8,7 @@ const db = require('../src/config/db');
     const password = process.env.ADMIN_PASSWORD || 'ChangeMe123!';
 
     const [[role]] = await db.query(
-      "SELECT id FROM roles WHERE name='Administrator' AND scope='ALL' AND status='ACTIVE' LIMIT 1"
+      "SELECT id FROM roles WHERE name='Administrator' AND status='ACTIVE' LIMIT 1"
     );
     if (!role) throw new Error('Run database/schema.sql first.');
 
@@ -18,14 +18,14 @@ const db = require('../src/config/db');
     if (rows.length) {
       await db.query(`
         UPDATE users
-        SET password_hash=?,role_id=?,department_id=NULL,status='ACTIVE'
+        SET password_hash=?,role_id=?,status='ACTIVE'
         WHERE id=?
       `, [hash, role.id, rows[0].id]);
       console.log('Admin password reset for', email);
     } else {
       await db.query(`
-        INSERT INTO users(employee_code,name,email,password_hash,department_id,role_id,status)
-        VALUES(?,?,?,?,NULL,?,'ACTIVE')
+        INSERT INTO users(employee_code,name,email,password_hash,role_id,status)
+        VALUES(?,?,?,?,?,'ACTIVE')
       `, ['ADMIN-001', 'System Administrator', email, hash, role.id]);
       console.log('Admin created:', email);
     }

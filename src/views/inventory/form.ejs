@@ -50,21 +50,15 @@
       </label>
       <p class="span-2 muted">Each stock line represents one batch and one container size. Add another line to track a different size from the same batch.</p>
     </div>
+    <label>Minimum stock alert threshold<input type="number" step="0.001" min="0" name="minimum_stock" value="<%= item?.minimum_stock??0 %>" required></label>
     <label>Qty received from vendor *<input id="quantity" type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
     <label>Unit *
-      <select id="unit" name="unit">
+      <select id="unit" name="unit" <%= item?'disabled':'' %>>
         <% ['Piece','Bottle','Box','Pair','Pack','Kg','Gram','Liter','ml','Kit','Set'].forEach(x=>{ %>
           <option <%= (item?.unit||'Piece')===x?'selected':'' %>><%= x %></option>
         <% }) %>
       </select>
-    </label>
-    <label>Department *
-      <select name="department_id" required <%= user.role_scope!=='ALL'?'disabled':'' %>>
-        <% deps.filter(d=>d.status==='ACTIVE').forEach(d=>{ %>
-          <option value="<%= d.id %>" <%= String(item?.department_id||user.department_id)===String(d.id)?'selected':'' %>><%= d.name %></option>
-        <% }) %>
-      </select>
-      <% if(user.role_scope!=='ALL'){ %><input type="hidden" name="department_id" value="<%= user.department_id %>"><% } %>
+      <% if(item){ %><input type="hidden" name="unit" value="<%= item.unit %>"><% } %>
     </label>
     <label>Vendor name<input id="vendor_name" name="vendor_name" value="<%= item?.vendor_name||'' %>"></label>
     <label>Bill no.<input id="vendor_bill_no" name="vendor_bill_no" value="<%= item?.vendor_bill_no||'' %>"></label>
@@ -80,6 +74,27 @@
     <div class="span-2 form-actions"><button class="primary">Save inventory</button><a class="secondary button" href="/inventory">Cancel</a></div>
   </form>
 </section>
+<% if(item&&user.permissions.includes('INVENTORY_UPDATE')&&item.status!=='RETIRED'){ %>
+  <section class="card stock-maintenance-card">
+    <div class="card-head"><div><div class="eyebrow">STOCK CONTROL</div><h2>Adjust or dispose of central stock</h2><p class="muted">Each change is recorded in the inventory transaction ledger.</p></div></div>
+    <div class="stock-maintenance-grid">
+      <form method="post" action="/inventory/<%= item.id %>/adjust" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <h3>Adjust stock</h3>
+        <label>Quantity change (+ or −)<input type="number" step="<%= item.chemical_form?'1':'0.001' %>" min="<%= item.chemical_form?'-'+item.quantity:'-'+item.quantity %>" name="delta" required placeholder="e.g. 2 or -1"></label>
+        <label>Reason *<input name="note" maxlength="500" required></label>
+        <button class="secondary">Record adjustment</button>
+      </form>
+      <form method="post" action="/inventory/<%= item.id %>/dispose" class="stack">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <h3>Dispose of stock</h3>
+        <label>Quantity *<input type="number" step="<%= item.chemical_form?'1':'0.001' %>" min="<%= item.chemical_form?'1':'0.001' %>" max="<%= item.quantity %>" name="quantity" required></label>
+        <label>Reason *<input name="note" maxlength="500" required></label>
+        <button class="secondary danger">Record disposal</button>
+      </form>
+    </div>
+  </section>
+<% } %>
 <script>
   const chemicalForm = document.getElementById('chemical_form');
   const chemicalFields = document.getElementById('chemical_fields');

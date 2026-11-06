@@ -7,26 +7,18 @@ DROP TABLE IF EXISTS inventory_transactions;
 DROP TABLE IF EXISTS inventory_assignments;
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS inventory_items;
+DROP TABLE IF EXISTS inventory_products;
+DROP TABLE IF EXISTS chemical_master;
 DROP TABLE IF EXISTS role_permissions;
 DROP TABLE IF EXISTS permissions;
 DROP TABLE IF EXISTS users;
 DROP TABLE IF EXISTS roles;
 DROP TABLE IF EXISTS departments;
 
-CREATE TABLE departments (
-  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-  name VARCHAR(100) NOT NULL UNIQUE,
-  description VARCHAR(500) NULL,
-  status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
-  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-) ENGINE=InnoDB;
-
 CREATE TABLE roles (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(100) NOT NULL UNIQUE,
   description VARCHAR(500) NULL,
-  scope ENUM('ALL','DEPARTMENT') NOT NULL,
   status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -53,14 +45,11 @@ CREATE TABLE users (
   name VARCHAR(150) NOT NULL,
   email VARCHAR(255) NOT NULL UNIQUE,
   password_hash VARCHAR(255) NOT NULL,
-  department_id BIGINT UNSIGNED NULL,
   role_id BIGINT UNSIGNED NOT NULL,
   status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY(department_id) REFERENCES departments(id) ON DELETE SET NULL,
   FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE RESTRICT,
-  INDEX idx_users_department(department_id),
   INDEX idx_users_status(status)
 ) ENGINE=InnoDB;
 
@@ -68,17 +57,26 @@ CREATE TABLE employees (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   employee_code VARCHAR(50) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
-  department_id BIGINT UNSIGNED NOT NULL,
   status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY(department_id) REFERENCES departments(id) ON DELETE RESTRICT,
-  INDEX idx_employees_department(department_id),
   INDEX idx_employees_status(status)
+) ENGINE=InnoDB;
+
+CREATE TABLE inventory_products (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  item_type ENUM('ASSET','CONSUMABLE') NOT NULL,
+  unit VARCHAR(30) NOT NULL,
+  minimum_stock DECIMAL(12,3) NOT NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uq_inventory_product_name_type_unit(name,item_type,unit)
 ) ENGINE=InnoDB;
 
 CREATE TABLE inventory_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  product_id BIGINT UNSIGNED NOT NULL,
   asset_code VARCHAR(80) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
   item_type ENUM('ASSET','CONSUMABLE') NOT NULL DEFAULT 'ASSET',
@@ -87,7 +85,6 @@ CREATE TABLE inventory_items (
   serial_number VARCHAR(150) NULL UNIQUE,
   quantity DECIMAL(12,3) NOT NULL DEFAULT 1,
   unit VARCHAR(30) NOT NULL DEFAULT 'Piece',
-  department_id BIGINT UNSIGNED NOT NULL,
   status ENUM('AVAILABLE','ASSIGNED','MAINTENANCE','LOST','DAMAGED','RETIRED') NOT NULL DEFAULT 'AVAILABLE',
   location VARCHAR(150) NULL,
   batch_number VARCHAR(100) NULL,
@@ -103,8 +100,8 @@ CREATE TABLE inventory_items (
   container_unit ENUM('ml','L','g','kg') NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-  FOREIGN KEY(department_id) REFERENCES departments(id) ON DELETE RESTRICT,
-  INDEX idx_inventory_department(department_id),
+  FOREIGN KEY(product_id) REFERENCES inventory_products(id) ON DELETE RESTRICT,
+  INDEX idx_inventory_product(product_id),
   INDEX idx_inventory_status(status),
   INDEX idx_inventory_type(item_type),
   INDEX idx_inventory_expiry(expiry_date)
@@ -115,6 +112,7 @@ CREATE TABLE inventory_assignments (
   inventory_id BIGINT UNSIGNED NOT NULL,
   user_id BIGINT UNSIGNED NULL,
   employee_id BIGINT UNSIGNED NULL,
+  remarks VARCHAR(500) NULL,
   quantity DECIMAL(12,3) NOT NULL,
   unit VARCHAR(30) NOT NULL,
   chemical_form ENUM('LIQUID','POWDER') NULL,
@@ -124,31 +122,29 @@ CREATE TABLE inventory_assignments (
   container_unit ENUM('ml','L','g','kg') NULL,
   assigned_by BIGINT UNSIGNED NULL,
   assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  returned_at TIMESTAMP NULL,
-  returned_quantity DECIMAL(12,3) NULL,
-  return_note VARCHAR(500) NULL,
   FOREIGN KEY(inventory_id) REFERENCES inventory_items(id) ON DELETE RESTRICT,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE RESTRICT,
   FOREIGN KEY(assigned_by) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_assignment_inventory(inventory_id),
   INDEX idx_assignment_user(user_id),
-  INDEX idx_assignment_employee(employee_id),
-  INDEX idx_assignment_active(returned_at)
+  INDEX idx_assignment_employee(employee_id)
 ) ENGINE=InnoDB;
 
 CREATE TABLE inventory_transactions (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   inventory_id BIGINT UNSIGNED NOT NULL,
+  assignment_id BIGINT UNSIGNED NULL,
   user_id BIGINT UNSIGNED NULL,
   employee_id BIGINT UNSIGNED NULL,
   actor_id BIGINT UNSIGNED NULL,
-  action ENUM('ADD','UPDATE','ASSIGN','RETURN','STATUS_CHANGE','RETIRE') NOT NULL,
+  action ENUM('ADD','UPDATE','ASSIGN','CONSUME','RETURN','ADJUST','DISPOSE','STATUS_CHANGE','RETIRE') NOT NULL,
   quantity DECIMAL(12,3) NULL,
   unit VARCHAR(30) NULL,
   details JSON NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(inventory_id) REFERENCES inventory_items(id) ON DELETE RESTRICT,
+  FOREIGN KEY(assignment_id) REFERENCES inventory_assignments(id) ON DELETE SET NULL,
   FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE SET NULL,
   FOREIGN KEY(employee_id) REFERENCES employees(id) ON DELETE SET NULL,
   FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL,
@@ -171,12 +167,9 @@ CREATE TABLE audit_logs (
   INDEX idx_audit_actor(actor_id)
 ) ENGINE=InnoDB;
 
-INSERT INTO departments(name,description) VALUES
-('Lab','Laboratory');
-
-INSERT INTO roles(name,description,scope) VALUES
-('Administrator','Full company-wide system access','ALL'),
-('Department User','Inventory access limited to the assigned department','DEPARTMENT');
+INSERT INTO roles(name,description) VALUES
+('Administrator','Full system administration access'),
+('Inventory User','Inventory issue and operations access');
 
 INSERT INTO permissions(code,name,description) VALUES
 ('DASHBOARD_VIEW','View dashboard','View permitted dashboard information'),
@@ -184,8 +177,9 @@ INSERT INTO permissions(code,name,description) VALUES
 ('INVENTORY_CREATE','Create inventory','Add inventory records'),
 ('INVENTORY_UPDATE','Update inventory','Edit inventory records'),
 ('INVENTORY_DELETE','Retire inventory','Retire inventory without destroying history'),
-('ASSIGNMENT_CREATE','Assign inventory','Assign inventory within permitted department scope'),
-('ASSIGNMENT_RETURN','Return inventory','Process inventory returns within permitted scope'),
+('ASSIGNMENT_CREATE','Assign inventory','Issue inventory to employees'),
+('ASSIGNMENT_RETURN','Return inventory','Return assigned equipment to available stock'),
+('ASSIGNMENT_CONSUME','Record consumption','Record consumables issued to employees as consumed'),
 ('USERS_VIEW','View users','Administrator-only user administration'),
 ('USERS_MANAGE','Manage users','Administrator-only user management'),
 ('ROLES_MANAGE','Manage roles','Administrator-only role/permission management'),
@@ -193,10 +187,9 @@ INSERT INTO permissions(code,name,description) VALUES
 
 INSERT INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r CROSS JOIN permissions p
-WHERE r.name='Administrator'
-  AND p.code NOT IN ('INVENTORY_CREATE','ASSIGNMENT_CREATE');
+WHERE r.name='Administrator';
 
 INSERT INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r JOIN permissions p
-ON p.code IN ('DASHBOARD_VIEW','INVENTORY_VIEW','INVENTORY_CREATE','INVENTORY_UPDATE','INVENTORY_DELETE','ASSIGNMENT_CREATE','ASSIGNMENT_RETURN')
-WHERE r.name='Department User';
+ON p.code IN ('DASHBOARD_VIEW','INVENTORY_VIEW','INVENTORY_CREATE','INVENTORY_UPDATE','INVENTORY_DELETE','ASSIGNMENT_CREATE','ASSIGNMENT_RETURN','ASSIGNMENT_CONSUME')
+WHERE r.name='Inventory User';

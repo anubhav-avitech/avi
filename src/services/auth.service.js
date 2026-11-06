@@ -4,15 +4,13 @@ const db = require('../config/db');
 async function login(email, password) {
   const [rows] = await db.query(`
     SELECT
-      u.id, u.name, u.email, u.department_id, u.role_id,
-      r.name AS role_name, r.scope, d.name AS department_name
+      u.id, u.name, u.email, u.role_id, r.name AS role_name
     FROM users u
     JOIN roles r ON r.id = u.role_id
-    LEFT JOIN departments d ON d.id = u.department_id
     WHERE u.email = ?
       AND u.status = 'ACTIVE'
       AND r.status = 'ACTIVE'
-      AND r.name IN ('Administrator', 'Department User')
+      AND r.name IN ('Administrator', 'Inventory User')
     LIMIT 1
   `, [email]);
 
@@ -25,9 +23,6 @@ async function login(email, password) {
   if (!hashRows.length || !(await bcrypt.compare(password, hashRows[0].password_hash))) {
     return null;
   }
-
-  if (rows[0].scope === 'DEPARTMENT' && !rows[0].department_id) return null;
-  if (rows[0].scope === 'ALL' && rows[0].role_name !== 'Administrator') return null;
 
   const [permissions] = await db.query(`
     SELECT p.code

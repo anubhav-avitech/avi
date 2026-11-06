@@ -1,61 +1,146 @@
-<section class="stats">
-  <div class="stat"><small>Records</small><strong><%= data.summary.total||0 %></strong></div>
-  <div class="stat"><small>Total quantity</small><strong><%= data.summary.quantity||0 %></strong></div>
-  <div class="stat"><small>Available</small><strong><%= data.summary.available||0 %></strong></div>
-  <div class="stat"><small>Assigned</small><strong><%= data.summary.assigned||0 %></strong></div>
-  <div class="stat"><small>Maintenance</small><strong><%= data.summary.maintenance||0 %></strong></div>
-</section>
-<section class="card stock-by-unit-card">
-  <div class="card-head">
-    <div>
-      <h2>Stock by unit</h2>
-      <p class="muted">Remaining quantities across all non-retired inventory.</p>
-    </div>
-  </div>
-  <% if(data.stockByUnit.length){ %>
-    <div class="stock-by-unit-grid">
-      <% data.stockByUnit.forEach(stock=>{ %>
-        <div class="stock-unit-total">
-          <strong><%= Number(stock.quantity).toLocaleString() %></strong>
-          <span><%= stock.unit %> total</span>
-          <small><%= stock.item_lines %> inventory <%= Number(stock.item_lines)===1?'line':'lines' %></small>
-        </div>
-      <% }) %>
-    </div>
-  <% } else { %>
-    <p class="empty">No active stock.</p>
+<header class="overview-heading">
+  <h1>Overview</h1>
+  <% if(user.permissions.includes('INVENTORY_CREATE')){ %>
+    <a class="primary button" href="/inventory/new">Add stock</a>
   <% } %>
+</header>
+
+<section class="overview-stats" aria-label="Inventory summary">
+  <a class="overview-stat" href="/inventory">
+    <span>Products</span>
+    <strong><%= Number(data.summary.total||0).toLocaleString() %></strong>
+  </a>
+  <a class="overview-stat" href="/assignments">
+    <span>Employees holding stock</span>
+    <strong><%= Number(data.assignmentSummary.employees||0).toLocaleString() %></strong>
+  </a>
+  <a class="overview-stat" href="/assignments">
+    <span>Products held</span>
+    <strong><%= Number(data.assignmentSummary.products||0).toLocaleString() %></strong>
+  </a>
+  <a class="overview-stat" href="#low-stock">
+    <span>Low stock</span>
+    <strong><%= Number(data.lowStockProducts.length||0).toLocaleString() %></strong>
+  </a>
+  <a class="overview-stat <%= data.expiringBatches.some(batch=>Number(batch.days_to_expiry)<0)?'overview-stat-critical':'' %>" href="#expiry-alerts">
+    <span>Expiry alerts</span>
+    <strong><%= Number(data.expiringBatches.length||0).toLocaleString() %></strong>
+  </a>
 </section>
-<% if(data.expiringChemicals.length){ %>
-  <section class="card expiry-alert-card">
-    <div class="card-head expiry-alert-head">
-      <div>
-        <div class="eyebrow">CHEMICAL STOCK</div>
-        <h2>Expiry alerts</h2>
-        <p class="muted">Chemicals expiring within <%= data.expiryWarningDays %> days, or already expired.</p>
+
+<div class="overview-grid overview-stock-grid">
+  <section class="card overview-card" id="available-stock">
+    <div class="overview-card-head">
+      <h2>Available stock</h2>
+      <% if(user.permissions.includes('INVENTORY_VIEW')){ %><a href="/inventory">Inventory</a><% } %>
+    </div>
+    <% if(data.availableByUnit.length){ %>
+      <div class="overview-unit-list">
+        <% data.availableByUnit.forEach(stock=>{ %>
+          <div class="overview-unit">
+            <span><%= stock.unit %></span>
+            <strong><%= Number(stock.quantity).toLocaleString() %></strong>
+          </div>
+        <% }) %>
       </div>
-      <a href="/inventory">View inventory</a>
-    </div>
-    <div class="expiry-alert-list">
-      <% data.expiringChemicals.forEach(chemical=>{ %>
-        <div class="expiry-alert-row">
-          <div class="expiry-alert-item">
-            <strong><%= chemical.name %></strong>
-            <small><%= chemical.asset_code %> · Batch <%= chemical.batch_number||'—' %> · <%= chemical.department %></small>
-          </div>
-          <div class="expiry-alert-stock">
-            <strong><%= chemical.quantity %> <%= chemical.unit %></strong>
-            <small><%= chemical.container_capacity %> <%= chemical.container_unit %> each</small>
-            <small>Total left: <%= Number(chemical.quantity*chemical.container_capacity).toLocaleString() %> <%= chemical.container_unit %></small>
-          </div>
-          <div class="expiry-alert-date">
-            <span class="expiry-badge <%= chemical.days_to_expiry<0?'expired':chemical.days_to_expiry<=7?'urgent':'upcoming' %>">
-              <%= chemical.days_to_expiry<0?`Expired ${Math.abs(chemical.days_to_expiry)} days ago`:chemical.days_to_expiry===0?'Expires today':`Expires in ${chemical.days_to_expiry} days` %>
-            </span>
-            <small>Expiry date: <%= chemical.expiry_date %></small>
-          </div>
-        </div>
-      <% }) %>
-    </div>
+    <% }else{ %><p class="overview-empty">No available stock</p><% } %>
   </section>
-<% } %>
+
+  <section class="card overview-card" id="assigned-stock">
+    <div class="overview-card-head">
+      <h2>With employees</h2>
+      <% if(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN')||user.permissions.includes('ASSIGNMENT_CONSUME')){ %><a href="/assignments">Assignments</a><% } %>
+    </div>
+    <% if(data.assignedByUnit.length){ %>
+      <div class="overview-unit-list">
+        <% data.assignedByUnit.forEach(stock=>{ %>
+          <div class="overview-unit">
+            <span><%= stock.unit %></span>
+            <strong><%= Number(stock.quantity).toLocaleString() %></strong>
+          </div>
+        <% }) %>
+      </div>
+    <% }else{ %><p class="overview-empty">No stock assigned</p><% } %>
+  </section>
+</div>
+
+<div class="overview-grid overview-alert-grid">
+  <section class="card overview-card" id="low-stock">
+    <div class="overview-card-head">
+      <h2>Low stock</h2>
+      <% if(user.permissions.includes('INVENTORY_VIEW')){ %><a href="/inventory">View inventory</a><% } %>
+    </div>
+    <% if(data.lowStockProducts.length){ %>
+      <div class="overview-list">
+        <% data.lowStockProducts.forEach(product=>{ %>
+          <a class="overview-row" href="/inventory?q=<%= encodeURIComponent(product.name) %>">
+            <span class="overview-row-main">
+              <strong><%= product.name %></strong>
+              <small><%= product.item_type %></small>
+            </span>
+            <span class="overview-row-value"><strong><%= Number(product.available_quantity).toLocaleString() %> <%= product.unit %></strong><small>of <%= Number(product.minimum_stock).toLocaleString() %> <%= product.unit %></small></span>
+            <span class="overview-pill low-stock-status">LOW</span>
+          </a>
+        <% }) %>
+      </div>
+    <% }else{ %><p class="overview-empty">No low-stock products</p><% } %>
+  </section>
+
+  <section class="card overview-card" id="expiry-alerts">
+    <div class="overview-card-head">
+      <h2>Expiring batches</h2>
+      <% if(user.permissions.includes('INVENTORY_VIEW')){ %><a href="/inventory/batches">All batches</a><% } %>
+    </div>
+    <% if(data.expiringBatches.length){ %>
+      <div class="overview-list">
+        <% data.expiringBatches.forEach(batch=>{ const days=Number(batch.days_to_expiry); const severity=days<0?'critical':days<=7?'urgent':days<=15?'warning':'upcoming'; const label=days<0?`Expired ${Math.abs(days)}d ago`:days===0?'Today':`In ${days}d`; %>
+          <a class="overview-row overview-expiry-row" href="/inventory/<%= batch.id %>/history">
+            <span class="overview-row-main">
+              <strong><%= batch.name %></strong>
+              <small>Batch <%= batch.batch_number||'—' %> · <%= batch.location||'No location' %></small>
+            </span>
+            <span class="overview-row-value"><strong><%= batch.expiry_date %></strong><small><%= Number(batch.central_quantity).toLocaleString() %> <%= batch.unit %> central<% if(Number(batch.assigned_quantity)>0){ %> · <%= Number(batch.assigned_quantity).toLocaleString() %> held<% } %></small></span>
+            <span class="overview-pill expiry-badge <%= severity %>"><%= label %></span>
+          </a>
+        <% }) %>
+      </div>
+    <% }else{ %><p class="overview-empty">No expiry alerts</p><% } %>
+  </section>
+</div>
+
+<div class="overview-grid overview-detail-grid">
+  <section class="card overview-card" id="employee-balances">
+    <div class="overview-card-head">
+      <h2>Employee balances</h2>
+      <% if(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN')||user.permissions.includes('ASSIGNMENT_CONSUME')){ %><a href="/assignments">All assignments</a><% } %>
+    </div>
+    <% if(data.employeeBalances.length){ %>
+      <div class="overview-list">
+        <% data.employeeBalances.forEach(balance=>{ %>
+          <a class="overview-row overview-balance-row" href="/assignments?employee_id=<%= balance.employee_id %>">
+            <span class="overview-row-main"><strong><%= balance.employee_name %></strong><small><%= balance.item_name %></small></span>
+            <span class="overview-row-value"><strong><%= Number(balance.quantity).toLocaleString() %> <%= balance.unit %></strong></span>
+          </a>
+        <% }) %>
+      </div>
+    <% }else{ %><p class="overview-empty">No employee balances</p><% } %>
+  </section>
+
+  <section class="card overview-card" id="recent-activity">
+    <div class="overview-card-head">
+      <h2>Recent activity</h2>
+      <% if(user.permissions.includes('INVENTORY_VIEW')){ %><a href="/history">History</a><% } %>
+    </div>
+    <% if(data.recentActivity.length){ %>
+      <div class="overview-list">
+        <% data.recentActivity.forEach(activity=>{ const labels={ADD:'Stock added',ASSIGN:'Stock assigned',CONSUME:'Consumed',RETURN:'Returned',ADJUST:'Adjusted',DISPOSE:'Disposed',UPDATE:'Item updated',STATUS_CHANGE:'Status changed',RETIRE:'Retired'}; %>
+          <a class="overview-row overview-activity-row" href="/inventory/<%= activity.inventory_id %>/history">
+            <span class="activity-mark <%= activity.action.toLowerCase() %>"></span>
+            <span class="overview-row-main"><strong><%= labels[activity.action]||activity.action %> · <%= activity.item_name %></strong><small><% if(activity.employee_name){ %><%= activity.employee_name %> · <% } %>by <%= activity.actor_name %> · <%= activity.created_at %></small></span>
+            <span class="overview-row-value"><strong><%= activity.quantity===null?'—':Number(activity.quantity).toLocaleString() %> <%= activity.unit||'' %></strong></span>
+          </a>
+        <% }) %>
+      </div>
+    <% }else{ %><p class="overview-empty">No recent activity</p><% } %>
+  </section>
+</div>
