@@ -3,6 +3,8 @@ const router = express.Router();
 const db = require('../config/db');
 const auth = require('../services/auth.service');
 const inventory = require('../services/inventory.service');
+const masters = require('../services/master.service');
+const purchaseOrders = require('../services/purchase-order.service');
 const users = require('../services/user.service');
 const employeeDirectory = require('../services/employee.service');
 const { dashboard } = require('../services/dashboard.service');
@@ -12,6 +14,322 @@ const { loginLimiter } = require('../middleware/security');
 const setFlash = (req, msg, type = 'success') => {
   req.session.flash = { msg, type };
 };
+const masterType = type => ['chemicals', 'vendors'].includes(type) ? type : null;
+const orderFormItems = data => {
+  const list = value => Array.isArray(value) ? value : value === undefined ? [] : [value];
+  const names = list(data.product_name);
+  const descriptions = list(data.description);
+  const quantities = list(data.quantity);
+  const units = list(data.unit);
+  const rates = list(data.rate);
+  const count = Math.max(names.length, descriptions.length, quantities.length, units.length, rates.length, 1);
+  return Array.from({ length: count }, (_, index) => ({
+    product_name: names[index] || '',
+    description: descriptions[index] || '',
+    quantity: quantities[index] || '',
+    unit: units[index] || '',
+    rate: rates[index] || ''
+  }));
+};
+
+router.get('/purchase-orders', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    let rows = [];
+    let filterErrors = {};
+    try {
+      rows = await purchaseOrders.list(req.query);
+    } catch (error) {
+      if (error.message !== 'INVALID_PURCHASE_ORDER_FILTER') throw error;
+      filterErrors = error.fields;
+    }
+    res.render('purchase-orders/index', {
+      title: 'Purchase orders',
+      rows,
+      query: req.query.q || '',
+      from: req.query.from || '',
+      to: req.query.to || '',
+      filterErrors
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/purchase-orders/new', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.render('purchase-orders/form', {
+      title: 'New purchase order',
+      action: '/purchase-orders/new',
+      vendors: await masters.list('vendors'),
+      chemicals: await masters.list('chemicals'),
+      record: { order_date: new Date().toISOString().slice(0, 10), payment_mode: 'none', advance_percent: 0 },
+      items: orderFormItems({}),
+      errors: {},
+      formError: null
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/purchase-orders/new', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const id = await purchaseOrders.create(req.body, req.session.user);
+    setFlash(req, 'Purchase order created.');
+    res.redirect(`/purchase-orders/${id}`);
+  } catch (error) {
+    if (error.message === 'INVALID_PURCHASE_ORDER' || error.message === 'INVALID_VENDOR') {
+      return res.status(422).render('purchase-orders/form', {
+        title: 'New purchase order',
+        action: '/purchase-orders/new',
+        vendors: await masters.list('vendors'),
+        chemicals: await masters.list('chemicals'),
+        record: req.body,
+        items: orderFormItems(req.body),
+        errors: error.fields || {},
+        formError: error.message === 'INVALID_VENDOR' ? 'Select an existing vendor from Vendor Master.' : null
+      });
+    }
+    next(error);
+  }
+});
+
+router.get('/purchase-orders/company-settings', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    res.render('purchase-orders/company-settings', {
+      title: 'Purchase order company details',
+      settings: await purchaseOrders.companySettings(),
+      errors: {},
+      formError: null
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/purchase-orders/company-settings', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await purchaseOrders.updateCompanySettings(req.body);
+    setFlash(req, 'Purchase order company details saved.');
+    res.redirect('/purchase-orders/company-settings');
+  } catch (error) {
+    if (error.message === 'INVALID_COMPANY_SETTINGS') {
+      return res.status(422).render('purchase-orders/company-settings', {
+        title: 'Purchase order company details',
+        settings: req.body,
+        errors: error.fields,
+        formError: null
+      });
+    }
+    next(error);
+  }
+});
+
+router.get('/purchase-orders/:id/edit', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const record = await purchaseOrders.get(req.params.id);
+    if (!record) return res.status(404).render('errors/404', { title: 'Not found' });
+    res.render('purchase-orders/form', {
+      title: `Edit ${record.po_number}`,
+      action: `/purchase-orders/${record.id}/edit`,
+      vendors: await masters.list('vendors'),
+      chemicals: await masters.list('chemicals'),
+      record: {
+        ...record,
+        payment_mode: Number(record.advance_percent) === 0 ? 'none' : Number(record.advance_percent) === 100 ? 'full' : 'custom'
+      },
+      items: record.items,
+      errors: {},
+      formError: null
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/purchase-orders/:id/edit', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await purchaseOrders.update(req.params.id, req.body, req.session.user);
+    setFlash(req, 'Purchase order updated.');
+    res.redirect(`/purchase-orders/${req.params.id}`);
+  } catch (error) {
+    if (error.message === 'NOT_FOUND') return res.status(404).render('errors/404', { title: 'Not found' });
+    if (error.message === 'INVALID_PURCHASE_ORDER' || error.message === 'INVALID_VENDOR') {
+      return res.status(422).render('purchase-orders/form', {
+        title: 'Edit purchase order',
+        action: `/purchase-orders/${req.params.id}/edit`,
+        vendors: await masters.list('vendors'),
+        chemicals: await masters.list('chemicals'),
+        record: req.body,
+        items: orderFormItems(req.body),
+        errors: error.fields || {},
+        formError: error.message === 'INVALID_VENDOR' ? 'Select an existing vendor from Vendor Master.' : null
+      });
+    }
+    next(error);
+  }
+});
+
+router.post('/purchase-orders/:id/delete', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    await purchaseOrders.remove(req.params.id, req.session.user);
+    setFlash(req, 'Purchase order deleted.');
+    res.redirect('/purchase-orders');
+  } catch (error) {
+    if (error.message === 'NOT_FOUND') return res.status(404).render('errors/404', { title: 'Not found' });
+    next(error);
+  }
+});
+
+router.get('/purchase-orders/:id/print', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const order = await purchaseOrders.get(req.params.id);
+    if (!order) return res.status(404).render('errors/404', { title: 'Not found' });
+    res.render('purchase-orders/print', { layout: false, title: order.po_number, order });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/purchase-orders/:id', requireAuth, requireAdmin, async (req, res, next) => {
+  try {
+    const order = await purchaseOrders.get(req.params.id);
+    if (!order) return res.status(404).render('errors/404', { title: 'Not found' });
+    res.render('purchase-orders/show', {
+      title: order.po_number,
+      order,
+      history: await purchaseOrders.history(req.params.id)
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/master/:type', requireAuth, requireAdmin, async (req, res, next) => {
+  const type = masterType(req.params.type);
+  if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
+  try {
+    const config = masters.configFor(type);
+    res.render('masters/index', {
+      title: `${config.label} master`,
+      type,
+      config,
+      rows: await masters.list(type, req.query.q),
+      query: req.query.q || ''
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get('/master/:type/new', requireAuth, requireAdmin, (req, res) => {
+  const type = masterType(req.params.type);
+  if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
+  const config = masters.configFor(type);
+  res.render('masters/form', {
+    title: `Add ${config.label.toLowerCase()}`,
+    type,
+    config,
+    fields: masters.fields(type),
+    record: {},
+    errors: {},
+    action: `/master/${type}/new`
+  });
+});
+
+router.post('/master/:type/new', requireAuth, requireAdmin, async (req, res, next) => {
+  const type = masterType(req.params.type);
+  if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
+  const config = masters.configFor(type);
+  try {
+    await masters.create(type, req.body, req.session.user);
+    setFlash(req, `${config.label} added.`);
+    res.redirect(`/master/${type}`);
+  } catch (error) {
+    if (error.message === 'INVALID_MASTER_DATA' || error.code === 'ER_DUP_ENTRY') {
+      return res.status(422).render('masters/form', {
+        title: `Add ${config.label.toLowerCase()}`,
+        type,
+        config,
+        fields: masters.fields(type),
+        record: req.body,
+        errors: error.fields || {},
+        formError: error.code === 'ER_DUP_ENTRY' ? `${config.label} already exists.` : null,
+        action: `/master/${type}/new`
+      });
+    }
+    if (error.message === 'NOT_FOUND') return res.status(404).render('errors/404', { title: 'Not found' });
+    next(error);
+  }
+});
+
+router.get('/master/:type/:id/edit', requireAuth, requireAdmin, async (req, res, next) => {
+  const type = masterType(req.params.type);
+  if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
+  try {
+    const config = masters.configFor(type);
+    const record = await masters.get(type, req.params.id);
+    if (!record) return res.status(404).render('errors/404', { title: 'Not found' });
+    res.render('masters/form', {
+      title: `Edit ${config.label.toLowerCase()}`,
+      type,
+      config,
+      fields: masters.fields(type),
+      record,
+      errors: {},
+      action: `/master/${type}/${record.id}/edit`
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post('/master/:type/:id/edit', requireAuth, requireAdmin, async (req, res, next) => {
+  const type = masterType(req.params.type);
+  if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
+  const config = masters.configFor(type);
+  try {
+    const record = await masters.get(type, req.params.id);
+    if (!record) return res.status(404).render('errors/404', { title: 'Not found' });
+    await masters.update(type, req.params.id, req.body, req.session.user);
+    setFlash(req, `${config.label} updated.`);
+    res.redirect(`/master/${type}`);
+  } catch (error) {
+    if (error.message === 'INVALID_MASTER_DATA' || error.code === 'ER_DUP_ENTRY') {
+      return res.status(422).render('masters/form', {
+        title: `Edit ${config.label.toLowerCase()}`,
+        type,
+        config,
+        fields: masters.fields(type),
+        record: { ...req.body, id: req.params.id },
+        errors: error.fields || {},
+        formError: error.code === 'ER_DUP_ENTRY' ? `${config.label} already exists.` : null,
+        action: `/master/${type}/${req.params.id}/edit`
+      });
+    }
+    if (error.message === 'NOT_FOUND') return res.status(404).render('errors/404', { title: 'Not found' });
+    next(error);
+  }
+});
+
+router.post('/master/:type/:id/delete', requireAuth, requireAdmin, async (req, res, next) => {
+  const type = masterType(req.params.type);
+  if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
+  const config = masters.configFor(type);
+  try {
+    await masters.remove(type, req.params.id, req.session.user);
+    setFlash(req, `${config.label} deleted.`);
+  } catch (error) {
+    if (error.message === 'MASTER_IN_USE' || error.code === 'ER_ROW_IS_REFERENCED_2') {
+      setFlash(req, `This ${config.label.toLowerCase()} cannot be deleted because it is referenced by inventory records.`, 'error');
+    } else if (error.message !== 'NOT_FOUND') {
+      return next(error);
+    } else {
+      setFlash(req, `${config.label} was not found.`, 'error');
+    }
+  }
+  res.redirect(`/master/${type}`);
+});
 
 router.get('/login', (req, res) => {
   res.render('auth/login', { title: 'Sign in', error: null });
@@ -116,6 +434,8 @@ router.get('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE'),
       title: 'Add inventory',
       item: null,
       batches: await inventory.chemicalBatches(),
+      chemicals: await masters.list('chemicals'),
+      vendors: await masters.list('vendors'),
       action: '/inventory/new'
     });
   } catch (error) {
@@ -138,6 +458,14 @@ router.post('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE')
     }
     if (error.message === 'INVALID_QUANTITY') {
       setFlash(req, 'Quantity must be greater than zero.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_CHEMICAL_MASTER') {
+      setFlash(req, 'Select a registered chemical from the suggestions.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_VENDOR_MASTER') {
+      setFlash(req, 'Select a registered vendor from the suggestions.', 'error');
       return res.redirect('/inventory/new');
     }
     if (error.message === 'INVALID_MINIMUM_STOCK' || error.message === 'INVALID_ITEM_NAME') {
@@ -251,6 +579,8 @@ router.get('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPDA
       title: 'Edit inventory',
       item,
       batches: [],
+      chemicals: await masters.list('chemicals'),
+      vendors: await masters.list('vendors'),
       action: `/inventory/${item.id}/edit`
     });
   } catch (error) {
@@ -271,6 +601,14 @@ router.post('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPD
     }
     if (error.message === 'INVALID_CHEMICAL') {
       setFlash(req, 'Enter a valid batch number, expiry date, container capacity and matching unit.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'INVALID_CHEMICAL_MASTER') {
+      setFlash(req, 'Select a registered chemical from the suggestions.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'INVALID_VENDOR_MASTER') {
+      setFlash(req, 'Select a registered vendor from the suggestions.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
     if (error.message === 'CHEMICAL_TYPE_IMMUTABLE') {

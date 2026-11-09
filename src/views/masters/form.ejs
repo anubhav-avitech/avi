@@ -1,0 +1,22 @@
+<div class="page-head">
+  <div><div class="eyebrow">MASTER DATA</div><h1><%= title %></h1><p class="muted">Enter the <%= config.label.toLowerCase() %> details below.</p></div>
+  <a class="secondary button" href="/master/<%= type %>">Back</a>
+</div>
+<section class="card form-card master-form-card">
+  <% if(typeof formError!=='undefined'&&formError){ %><p class="flash error" role="alert"><%= formError %></p><% } %>
+  <form method="post" action="<%= action %>" class="grid-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <% fields.forEach(field=>{ const error=errors[field.name]; %>
+      <label class="<%= field.name==='address'?'span-2':'' %>">
+        <%= field.label %><%= field.required?' *':'' %>
+        <% if(field.name==='address'){ %>
+          <textarea name="<%= field.name %>" maxlength="<%= field.maxLength %>" rows="3" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>><%= record[field.name]||'' %></textarea>
+        <% } else { %>
+          <input name="<%= field.name %>" type="<%= field.name==='email'?'email':'text' %>" maxlength="<%= field.maxLength %>" value="<%= record[field.name]||'' %>" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>>
+        <% } %>
+        <% if(error){ %><span class="field-error" id="<%= field.name %>-error"><%= error %></span><% } %>
+      </label>
+    <% }) %>
+    <div class="span-2 form-actions"><button class="primary">Save <%= config.label.toLowerCase() %></button><a class="secondary button" href="/master/<%= type %>">Cancel</a></div>
+  </form>
+</section>

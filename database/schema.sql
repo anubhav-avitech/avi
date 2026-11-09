@@ -5,9 +5,14 @@ USE company_inventory;
 DROP TABLE IF EXISTS audit_logs;
 DROP TABLE IF EXISTS inventory_transactions;
 DROP TABLE IF EXISTS inventory_assignments;
+DROP TABLE IF EXISTS purchase_order_history;
+DROP TABLE IF EXISTS purchase_order_items;
+DROP TABLE IF EXISTS purchase_orders;
+DROP TABLE IF EXISTS company_settings;
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS inventory_items;
 DROP TABLE IF EXISTS inventory_products;
+DROP TABLE IF EXISTS vendor_master;
 DROP TABLE IF EXISTS chemical_master;
 DROP TABLE IF EXISTS role_permissions;
 DROP TABLE IF EXISTS permissions;
@@ -74,9 +79,108 @@ CREATE TABLE inventory_products (
   UNIQUE KEY uq_inventory_product_name_type_unit(name,item_type,unit)
 ) ENGINE=InnoDB;
 
+CREATE TABLE chemical_master (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL UNIQUE,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE vendor_master (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL UNIQUE,
+  contact_number VARCHAR(30) NOT NULL,
+  address VARCHAR(500) NOT NULL,
+  email VARCHAR(254) NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE company_settings (
+  id TINYINT UNSIGNED PRIMARY KEY,
+  company_name VARCHAR(150) NOT NULL,
+  address VARCHAR(500) NULL,
+  contact_number VARCHAR(30) NULL,
+  email VARCHAR(254) NULL,
+  tax_registration_number VARCHAR(30) NULL,
+  logo_path VARCHAR(255) NOT NULL DEFAULT '/logo.png',
+  jurisdiction VARCHAR(150) NULL,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+INSERT INTO company_settings(id,company_name,address,contact_number,email,tax_registration_number,logo_path,jurisdiction)
+VALUES(1,'AVITECH NUTRITION PVT. LTD.','GP-37, Sector 18, HSIIDC, Gurugram, Haryana, India 122015',
+  '+91-124-4011148','purchase@avitechnutrition.com',NULL,'/logo.png','Gurugram jurisdiction');
+
+CREATE TABLE purchase_orders (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  po_number VARCHAR(40) NULL UNIQUE,
+  order_date DATE NOT NULL,
+  vendor_id BIGINT UNSIGNED NOT NULL,
+  vendor_name VARCHAR(150) NOT NULL,
+  vendor_contact_number VARCHAR(30) NOT NULL,
+  vendor_address VARCHAR(500) NOT NULL,
+  vendor_email VARCHAR(254) NULL,
+  company_name VARCHAR(150) NOT NULL,
+  company_address VARCHAR(500) NULL,
+  company_contact_number VARCHAR(30) NULL,
+  company_email VARCHAR(254) NULL,
+  company_tax_registration_number VARCHAR(30) NULL,
+  company_logo_path VARCHAR(255) NOT NULL,
+  company_jurisdiction VARCHAR(150) NULL,
+  total_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  advance_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+  advance_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  remaining_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
+  payment_conditions VARCHAR(1000) NULL,
+  notes VARCHAR(2000) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  updated_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY(vendor_id) REFERENCES vendor_master(id) ON DELETE RESTRICT,
+  FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+  FOREIGN KEY(updated_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_purchase_order_date(order_date),
+  INDEX idx_purchase_order_vendor(vendor_id),
+  CHECK(advance_percent>=0 AND advance_percent<=100),
+  CHECK(total_amount>=0 AND advance_amount>=0 AND remaining_amount>=0)
+) ENGINE=InnoDB;
+
+CREATE TABLE purchase_order_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  purchase_order_id BIGINT UNSIGNED NOT NULL,
+  serial_number INT UNSIGNED NOT NULL,
+  product_name VARCHAR(200) NOT NULL,
+  description VARCHAR(1000) NULL,
+  quantity DECIMAL(12,3) NOT NULL,
+  unit VARCHAR(30) NOT NULL,
+  rate DECIMAL(15,2) NOT NULL,
+  amount DECIMAL(15,2) NOT NULL,
+  FOREIGN KEY(purchase_order_id) REFERENCES purchase_orders(id) ON DELETE CASCADE,
+  UNIQUE KEY uq_purchase_order_serial(purchase_order_id,serial_number),
+  CHECK(quantity>0 AND rate>=0 AND amount>=0)
+) ENGINE=InnoDB;
+
+CREATE TABLE purchase_order_history (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  purchase_order_id BIGINT UNSIGNED NULL,
+  po_number VARCHAR(40) NOT NULL,
+  action ENUM('CREATED','UPDATED','DELETED') NOT NULL,
+  actor_id BIGINT UNSIGNED NULL,
+  snapshot JSON NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(purchase_order_id) REFERENCES purchase_orders(id) ON DELETE SET NULL,
+  FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_purchase_order_history_order(purchase_order_id),
+  INDEX idx_purchase_order_history_created(created_at)
+) ENGINE=InnoDB;
+
 CREATE TABLE inventory_items (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   product_id BIGINT UNSIGNED NOT NULL,
+  chemical_id BIGINT UNSIGNED NULL,
+  vendor_id BIGINT UNSIGNED NULL,
   asset_code VARCHAR(80) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
   item_type ENUM('ASSET','CONSUMABLE') NOT NULL DEFAULT 'ASSET',
@@ -101,7 +205,11 @@ CREATE TABLE inventory_items (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY(product_id) REFERENCES inventory_products(id) ON DELETE RESTRICT,
+  FOREIGN KEY(chemical_id) REFERENCES chemical_master(id) ON DELETE RESTRICT,
+  FOREIGN KEY(vendor_id) REFERENCES vendor_master(id) ON DELETE RESTRICT,
   INDEX idx_inventory_product(product_id),
+  INDEX idx_inventory_chemical(chemical_id),
+  INDEX idx_inventory_vendor(vendor_id),
   INDEX idx_inventory_status(status),
   INDEX idx_inventory_type(item_type),
   INDEX idx_inventory_expiry(expiry_date)

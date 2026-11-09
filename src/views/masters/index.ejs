@@ -1,0 +1,28 @@
+<div class="page-head">
+  <div><div class="eyebrow">MASTER DATA</div><h1><%= config.label %> master</h1><p class="muted">Manage registered <%= config.label.toLowerCase() %> records.</p></div>
+  <a class="primary button" href="/master/<%= type %>/new">Add <%= config.label.toLowerCase() %></a>
+</div>
+<form class="toolbar master-search" method="get" action="/master/<%= type %>">
+  <input name="q" value="<%= query %>" placeholder="Search <%= config.label.toLowerCase() %> records…" aria-label="Search <%= config.label.toLowerCase() %> records">
+  <button class="secondary">Search</button>
+</form>
+<section class="card master-table-card">
+  <table class="master-table">
+    <thead><tr><% config.fields.forEach(field=>{ %><th><%= field.label %></th><% }) %><th class="master-actions-heading">Actions</th></tr></thead>
+    <tbody>
+      <% if(!rows.length){ %><tr><td colspan="<%= config.fields.length+1 %>" class="empty"><%= query?'No matching records.':`No ${config.label.toLowerCase()}s registered yet.` %></td></tr><% } %>
+      <% rows.forEach(record=>{ %>
+        <tr>
+          <% config.fields.forEach(field=>{ %><td><%= record[field.name] || '—' %></td><% }) %>
+          <td class="actions">
+            <a href="/master/<%= type %>/<%= record.id %>/edit">Edit</a>
+            <form method="post" action="/master/<%= type %>/<%= record.id %>/delete" onsubmit="return confirm('Delete this <%= config.label.toLowerCase() %>? Records referenced by inventory cannot be deleted.');">
+              <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+              <button class="link danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+      <% }) %>
+    </tbody>
+  </table>
+</section>

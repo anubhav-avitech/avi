@@ -48,7 +48,7 @@ app.use(compression());
 app.use(
   express.urlencoded({
     extended: false,
-    limit: '20kb'
+    limit: '1mb'
   })
 );
 

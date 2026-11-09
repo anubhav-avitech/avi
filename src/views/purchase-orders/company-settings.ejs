@@ -1,0 +1,19 @@
+<div class="page-head">
+  <div><div class="eyebrow">PROCUREMENT</div><h1>Purchase order company details</h1><p class="muted">These details are saved on new orders and printed with them.</p></div>
+  <a class="secondary button" href="/purchase-orders">Back to purchase orders</a>
+</div>
+<section class="card form-card po-company-settings">
+  <% if(typeof formError!=='undefined'&&formError){ %><div class="flash error"><%= formError %></div><% } %>
+  <form method="post" action="/purchase-orders/company-settings" class="grid-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <% const fields=[['company_name','Company name *',150],['contact_number','Contact number',30],['email','Email',254],['tax_registration_number','GST / tax registration number',30],['address','Company address',500],['logo_path','Logo path',255],['jurisdiction','Jurisdiction footer',150]]; fields.forEach(([name,label,max])=>{ const error=errors[name]; %>
+      <label class="<%= name==='address'?'span-2':'' %>"><%= label %>
+        <% if(name==='address'){ %><textarea name="<%= name %>" maxlength="<%= max %>" rows="3"><%= settings[name]||'' %></textarea>
+        <% }else{ %><input name="<%= name %>" type="<%= name==='email'?'email':'text' %>" maxlength="<%= max %>" value="<%= settings[name]??(name==='logo_path'?'/logo.png':'') %>" <%= name==='company_name'?'required':'' %>><% } %>
+        <% if(error){ %><span class="field-error"><%= error %></span><% } %>
+      </label>
+    <% }) %>
+    <p class="span-2 muted">Logo path must point to a local public asset, for example <code>/logo.png</code>.</p>
+    <div class="span-2 form-actions"><button class="primary">Save company details</button><a class="secondary button" href="/purchase-orders">Cancel</a></div>
+  </form>
+</section>

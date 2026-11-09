@@ -1,0 +1,16 @@
+<label class="master-autocomplete-label">
+  <%= label %><%= required?' *':'' %>
+  <div class="master-autocomplete" data-master-combobox>
+    <input type="text" id="<%= inputId %>" role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
+      aria-expanded="false" aria-controls="<%= listId %>" autocomplete="off" placeholder="Search or select…"
+      data-master-input="<%= fieldName %>" value="<%= selectedName||'' %>" <%= required?'required':'' %>>
+    <input type="hidden" id="<%= fieldName %>" name="<%= fieldName %>" value="<%= selectedId||'' %>">
+    <div class="master-autocomplete-list" id="<%= listId %>" role="listbox" hidden>
+      <% options.forEach(option=>{ %>
+        <button type="button" class="master-autocomplete-option" role="option" aria-selected="false"
+          id="<%= listId %>-option-<%= option.id %>" data-value="<%= option.id %>" data-name="<%= option.name %>"><%= option.name %></button>
+      <% }) %>
+      <div class="master-autocomplete-empty" hidden>No matching records.</div>
+    </div>
+  </div>
+</label>

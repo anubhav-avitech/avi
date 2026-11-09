@@ -5,7 +5,7 @@
 <section class="card form-card">
   <form method="post" action="<%= action %>" class="grid-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label>Name *<input name="name" required maxlength="150" value="<%= item?.name||'' %>"></label>
+    <label id="stock_name_field" <%= item?.chemical_form?'hidden':'' %>>Name *<input id="name" name="name" required maxlength="150" value="<%= item?.chemical_form?'':item?.name||'' %>" <%= item?.chemical_form?'disabled':'' %>></label>
     <label>Item type
       <select id="item_type" name="item_type">
         <option value="ASSET" <%= item?.item_type==='ASSET'||!item?'selected':'' %>>Asset</option>
@@ -26,7 +26,7 @@
           <option value="">Enter a new batch</option>
           <% batches.forEach(batch=>{ %>
             <option
-              data-name="<%= batch.name %>"
+              data-chemical-id="<%= batch.chemical_id %>"
               data-form="<%= batch.chemical_form %>"
               data-batch="<%= batch.batch_number %>"
               data-manufacturer="<%= batch.manufacturer||'' %>"
@@ -38,6 +38,16 @@
       </label>
     <% } %>
     <div id="chemical_fields" class="span-2 grid-form" <%= item?.chemical_form?'':'hidden' %>>
+      <%- include('../partials/master-autocomplete', {
+        label: 'Chemical name',
+        fieldName: 'chemical_id',
+        inputId: 'chemical_search',
+        listId: 'chemical_options',
+        options: chemicals,
+        selectedId: item?.chemical_master_id,
+        selectedName: item?.chemical_master_name,
+        required: Boolean(item?.chemical_form)
+      }) %>
       <label>Container capacity *
         <input type="number" step="0.001" min="0.001" name="container_capacity" value="<%= item?.container_capacity||'' %>">
       </label>
@@ -60,7 +70,16 @@
       </select>
       <% if(item){ %><input type="hidden" name="unit" value="<%= item.unit %>"><% } %>
     </label>
-    <label>Vendor name<input id="vendor_name" name="vendor_name" value="<%= item?.vendor_name||'' %>"></label>
+    <%- include('../partials/master-autocomplete', {
+      label: 'Vendor name',
+      fieldName: 'vendor_id',
+      inputId: 'vendor_search',
+      listId: 'vendor_options',
+      options: vendors,
+      selectedId: item?.vendor_master_id,
+      selectedName: item?.vendor_master_name,
+      required: false
+    }) %>
     <label>Bill no.<input id="vendor_bill_no" name="vendor_bill_no" value="<%= item?.vendor_bill_no||'' %>"></label>
     <label>Make / Grade<input id="make_grade" name="make_grade" value="<%= item?.make_grade||'' %>"></label>
     <label>Received by<input id="received_by" name="received_by" value="<%= item?.received_by||'' %>"></label>
@@ -102,10 +121,120 @@
   const unit = document.getElementById('unit');
   const capacityUnit = document.querySelector('[name="container_unit"]');
   const quantity = document.getElementById('quantity');
+  const chemicalSearch = document.getElementById('chemical_search');
+  const chemicalId = document.getElementById('chemical_id');
+  const stockNameField = document.getElementById('stock_name_field');
+  const stockName = document.getElementById('name');
+
+  document.querySelectorAll('[data-master-combobox]').forEach(combobox => {
+    const input = combobox.querySelector('[data-master-input]');
+    const idInput = combobox.querySelector('input[type="hidden"]');
+    const list = combobox.querySelector('[role="listbox"]');
+    const options = Array.from(list.querySelectorAll('[role="option"]'));
+    const empty = list.querySelector('.master-autocomplete-empty');
+    let activeIndex = -1;
+
+    function showOptions() {
+      list.hidden = false;
+      input.setAttribute('aria-expanded', 'true');
+    }
+
+    function hideOptions() {
+      list.hidden = true;
+      input.setAttribute('aria-expanded', 'false');
+      input.removeAttribute('aria-activedescendant');
+      activeIndex = -1;
+    }
+
+    function filterOptions() {
+      const query = input.value.trim().toLocaleLowerCase();
+      let visible = 0;
+      options.forEach(option => {
+        const matches = option.dataset.name.toLocaleLowerCase().startsWith(query);
+        option.hidden = !matches;
+        option.setAttribute('aria-selected', 'false');
+        if (matches) visible += 1;
+      });
+      empty.hidden = visible > 0;
+      activeIndex = -1;
+    }
+
+    function selectOption(option) {
+      input.value = option.dataset.name;
+      idInput.value = option.dataset.value;
+      input.setCustomValidity('');
+      hideOptions();
+      input.dispatchEvent(new Event('master-selection', { bubbles: true }));
+    }
+
+    input.addEventListener('focus', () => {
+      filterOptions();
+      showOptions();
+    });
+    input.addEventListener('input', () => {
+      idInput.value = '';
+      input.setCustomValidity(input.value.trim() ? 'Select an existing option from the list.' : '');
+      filterOptions();
+      showOptions();
+    });
+    input.addEventListener('keydown', event => {
+      const visibleOptions = options.filter(option => !option.hidden);
+      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+        event.preventDefault();
+        showOptions();
+        if (!visibleOptions.length) return;
+        const direction = event.key === 'ArrowDown' ? 1 : -1;
+        activeIndex = activeIndex < 0
+          ? (direction > 0 ? 0 : visibleOptions.length - 1)
+          : (activeIndex + direction + visibleOptions.length) % visibleOptions.length;
+        visibleOptions.forEach((option, index) => option.setAttribute('aria-selected', String(index === activeIndex)));
+        if (visibleOptions[activeIndex]) input.setAttribute('aria-activedescendant', visibleOptions[activeIndex].id);
+        if (visibleOptions[activeIndex]) visibleOptions[activeIndex].scrollIntoView({ block: 'nearest' });
+      } else if (event.key === 'Enter' && !list.hidden) {
+        const option = visibleOptions[activeIndex];
+        if (option) {
+          event.preventDefault();
+          selectOption(option);
+        }
+      } else if (event.key === 'Escape') {
+        hideOptions();
+      }
+    });
+    options.forEach(option => option.addEventListener('click', () => selectOption(option)));
+    document.addEventListener('click', event => {
+      if (!combobox.contains(event.target)) hideOptions();
+    });
+    input.addEventListener('blur', () => {
+      window.setTimeout(hideOptions, 100);
+    });
+    input.addEventListener('master-selection', () => {
+      if (input.value.trim() && !idInput.value) input.setCustomValidity('Select an existing option from the list.');
+      else input.setCustomValidity('');
+    });
+    filterOptions();
+  });
+
+  window.selectMasterOption = (fieldName, id) => {
+    const masterInput = Array.from(document.querySelectorAll('[data-master-input]'))
+      .find(input => input.dataset.masterInput === fieldName);
+    const combobox = masterInput?.closest('[data-master-combobox]');
+    if (!combobox) return;
+    const option = Array.from(combobox.querySelectorAll('[role="option"]'))
+      .find(candidate => candidate.dataset.value === String(id));
+    if (option) option.click();
+  };
 
   function updateChemicalFields() {
     const isChemical = Boolean(chemicalForm.value);
     chemicalFields.hidden = !isChemical;
+    stockNameField.hidden = isChemical;
+    stockName.disabled = isChemical;
+    chemicalSearch.required = isChemical;
+    if (!isChemical) {
+      chemicalId.value = '';
+      chemicalSearch.value = '';
+      chemicalSearch.setCustomValidity('');
+    }
     document.querySelector('[name="container_capacity"]').required = isChemical;
     capacityUnit.required = isChemical;
     document.getElementById('batch_number').required = isChemical;
@@ -144,12 +273,17 @@
       });
       if (!reuseBatch) {
         chemicalName.value = '';
+        chemicalName.readOnly = false;
+        chemicalForm.value = '';
+        chemicalId.value = '';
+        chemicalSearch.value = '';
         batchNumber.value = '';
         manufacturer.value = '';
         expiryDate.value = '';
+        updateChemicalFields();
         return;
       }
-      chemicalName.value = option.dataset.name;
+      window.selectMasterOption('chemical_id', option.dataset.chemicalId);
       chemicalForm.value = option.dataset.form;
       batchNumber.value = option.dataset.batch;
       manufacturer.value = option.dataset.manufacturer;

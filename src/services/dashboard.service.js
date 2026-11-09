@@ -67,7 +67,7 @@ async function dashboard() {
   `);
 
   const [lowStockProducts] = await db.query(`
-    SELECT p.id,p.name,p.item_type,p.unit,p.minimum_stock,
+    SELECT p.id,COALESCE(MAX(c.name),p.name) AS name,p.item_type,p.unit,p.minimum_stock,
            COALESCE(SUM(CASE
              WHEN i.status='AVAILABLE'
                AND (i.expiry_date IS NULL OR i.expiry_date>=CURDATE())
@@ -75,10 +75,11 @@ async function dashboard() {
            END),0) AS available_quantity
     FROM inventory_products p
     JOIN inventory_items i ON i.product_id=p.id
+    LEFT JOIN chemical_master c ON c.id=i.chemical_id
     WHERE p.minimum_stock>0 AND i.status<>'RETIRED'
     GROUP BY p.id,p.name,p.item_type,p.unit,p.minimum_stock
     HAVING available_quantity<=p.minimum_stock
-    ORDER BY available_quantity ASC,p.name
+    ORDER BY available_quantity ASC,name
   `);
 
   const [expiringBatches] = await db.query(`

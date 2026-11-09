@@ -129,5 +129,28 @@ consumption and stock movement ledger actions; and removes department columns
 and department scoping. Newly added product minimum-stock thresholds default to
 zero and can be configured from each product's inventory edit form.
 
+For an existing installation already using the inventory overview schema, back
+up the database and then run the master-data migration:
+
+```bash
+mysql -u root -p < database/migrate-chemical-vendor-masters.sql
+```
+
+This creates the administrator-managed chemical and vendor masters, backfills
+existing inventory references, and sets legacy vendor contact/address values
+to `Not provided` where those details were not previously stored.
+
+For the administrator-only purchase order module, apply its additive migration
+after the chemical/vendor master migration:
+
+```bash
+mysql -u root -p < database/migrate-product-orders.sql
+```
+
+Configure printable company details and logo path in **Master → Purchase
+orders → Company details**. Vendor and company details are snapshotted when
+each purchase order is created so reprints remain consistent. The jurisdiction
+footer is configurable there as well.
+
 Do not run `database/schema.sql` on an existing database whose data must be
 preserved; it drops and recreates the application tables.

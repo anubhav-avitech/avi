@@ -11,7 +11,7 @@ function normalizeQuantity(value) {
   return quantity;
 }
 
-function chemicalDetails(data) {
+function chemicalDetails(data, chemicalName) {
   const form = String(data.chemical_form || '').toUpperCase();
   if (!form) return null;
   if (!['LIQUID', 'POWDER'].includes(form)) throw new Error('INVALID_CHEMICAL');
@@ -23,7 +23,6 @@ function chemicalDetails(data) {
   const capacity = normalizeQuantity(rawCapacity);
   const unit = String(data.container_unit || '');
   const validUnits = form === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
-  const chemicalName = String(data.name || '').trim();
   const batchNumber = String(data.batch_number || '').trim();
   const expiryDate = String(data.expiry_date || '');
   const parsedExpiry = new Date(`${expiryDate}T00:00:00Z`);
@@ -50,6 +49,20 @@ function chemicalDetails(data) {
     batchNumber,
     expiryDate
   };
+}
+
+async function selectedMaster(conn, table, rawId, required, errorCode) {
+  const raw = String(rawId || '');
+  if (!raw) {
+    if (required) throw new Error(errorCode);
+    return null;
+  }
+  if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    throw new Error(errorCode);
+  }
+  const [rows] = await conn.query(`SELECT id,name FROM ${table} WHERE id=?`, [Number(raw)]);
+  if (!rows.length) throw new Error(errorCode);
+  return rows[0];
 }
 
 function normalizeStockQuantity(value, chemical) {
@@ -80,6 +93,7 @@ async function productIdFor(conn, name, itemType, unit, minimumStock) {
 async function list(user, search) {
   let sql = `
     SELECT i.*,p.minimum_stock,
+           c.name AS chemical_master_name,v.name AS vendor_master_name,
            (
              SELECT COALESCE(SUM(stock.quantity),0)
              FROM inventory_items stock
@@ -90,25 +104,31 @@ async function list(user, search) {
            (i.expiry_date IS NOT NULL AND i.expiry_date<CURDATE()) AS expired
     FROM inventory_items i
     JOIN inventory_products p ON p.id=i.product_id
+    LEFT JOIN chemical_master c ON c.id=i.chemical_id
+    LEFT JOIN vendor_master v ON v.id=i.vendor_id
     WHERE 1=1
   `;
   const params = [];
 
   if (search) {
-    sql += ' AND (i.asset_code LIKE ? OR i.name LIKE ? OR i.category LIKE ? OR i.serial_number LIKE ? OR i.batch_number LIKE ?)';
+    sql += ' AND (i.asset_code LIKE ? OR COALESCE(c.name,i.name) LIKE ? OR i.category LIKE ? OR i.serial_number LIKE ? OR i.batch_number LIKE ? OR COALESCE(v.name,i.vendor_name) LIKE ?)';
     const term = `%${String(search).trim()}%`;
-    params.push(term, term, term, term, term);
+    params.push(term, term, term, term, term, term);
   }
-  sql += ' ORDER BY i.name ASC,i.batch_number ASC,i.updated_at DESC';
+  sql += ' ORDER BY COALESCE(c.name,i.name) ASC,i.batch_number ASC,i.updated_at DESC';
   const [rows] = await db.query(sql, params);
   return rows;
 }
 
 async function get(id) {
   const [rows] = await db.query(`
-    SELECT i.*,p.name AS product_name,p.item_type AS product_item_type,p.unit AS product_unit,p.minimum_stock
+    SELECT i.*,p.name AS product_name,p.item_type AS product_item_type,p.unit AS product_unit,p.minimum_stock,
+           c.id AS chemical_master_id,c.name AS chemical_master_name,v.id AS vendor_master_id,
+           v.name AS vendor_master_name
     FROM inventory_items i
     JOIN inventory_products p ON p.id=i.product_id
+    LEFT JOIN chemical_master c ON c.id=i.chemical_id
+    LEFT JOIN vendor_master v ON v.id=i.vendor_id
     WHERE i.id=?
   `, [id]);
   return rows[0] || null;
@@ -135,8 +155,8 @@ async function batchReceivingRecord(batchNumber) {
   if (!batch || batch.length > 100) throw new Error('INVALID_BATCH');
 
   const [lines] = await db.query(`
-    SELECT i.id,i.asset_code,i.name,i.chemical_form,i.batch_number,
-           i.vendor_name,i.vendor_bill_no,i.received_date,i.received_by,
+    SELECT i.id,i.asset_code,COALESCE(c.name,i.name) AS name,i.chemical_form,i.batch_number,
+           COALESCE(v.name,i.vendor_name) AS vendor_name,i.vendor_bill_no,i.received_date,i.received_by,
            i.make_grade,i.manufacturer,i.expiry_date,i.location,
            i.quantity,i.unit,i.container_capacity,i.container_unit,
            COALESCE((
@@ -150,6 +170,8 @@ async function batchReceivingRecord(batchNumber) {
              WHERE t.inventory_id=i.id AND t.action='ADD'
            ),i.quantity) AS quantity_received
     FROM inventory_items i
+    LEFT JOIN chemical_master c ON c.id=i.chemical_id
+    LEFT JOIN vendor_master v ON v.id=i.vendor_id
     WHERE i.chemical_form IS NOT NULL
       AND i.batch_number=?
     ORDER BY i.name ASC,i.container_capacity ASC,i.container_unit ASC,i.id ASC
@@ -164,44 +186,50 @@ async function batchReceivingRecord(batchNumber) {
 
 async function chemicalBatches() {
   const [rows] = await db.query(`
-    SELECT DISTINCT name,chemical_form,batch_number,manufacturer,expiry_date
-    FROM inventory_items
-    WHERE chemical_form IS NOT NULL AND batch_number IS NOT NULL
-    ORDER BY name,batch_number
+    SELECT DISTINCT i.chemical_id,c.name, i.chemical_form,i.batch_number,i.manufacturer,i.expiry_date
+    FROM inventory_items i
+    JOIN chemical_master c ON c.id=i.chemical_id
+    WHERE i.chemical_form IS NOT NULL AND i.batch_number IS NOT NULL
+    ORDER BY c.name,i.batch_number
   `);
   return rows;
 }
 
 async function create(data, user) {
-  const chemical = chemicalDetails(data);
-  const quantity = normalizeStockQuantity(data.quantity, chemical);
-  const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
-  const assetCode = `${chemical ? 'CHEM' : 'STK'}-${randomUUID().toUpperCase()}`;
-  const name = String(data.name || '').trim();
-  if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
-  const minimumStock = normalizeMinimumStock(data.minimum_stock);
-
-  const receivedDate = String(data.received_date || '').trim();
-  const vendorName = String(data.vendor_name || '').trim();
-  const vendorBillNo = String(data.vendor_bill_no || '').trim();
-  const makeGrade = String(data.make_grade || '').trim();
-  const receivedBy = String(data.received_by || '').trim();
-  const stockUnit = chemical ? chemical.packageUnit : data.unit || 'Piece';
-
   const conn = await db.getConnection();
   let inventoryId;
   try {
     await conn.beginTransaction();
+    const form = String(data.chemical_form || '').toUpperCase();
+    const chemicalMaster = form
+      ? await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER')
+      : null;
+    const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
+    const chemical = chemicalDetails(data, chemicalMaster?.name);
+    const quantity = normalizeStockQuantity(data.quantity, chemical);
+    const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
+    const assetCode = `${chemical ? 'CHEM' : 'STK'}-${randomUUID().toUpperCase()}`;
+    const name = chemical ? chemicalMaster.name : String(data.name || '').trim();
+    if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
+    const minimumStock = normalizeMinimumStock(data.minimum_stock);
+    const receivedDate = String(data.received_date || '').trim();
+    const vendorName = vendorMaster?.name || null;
+    const vendorBillNo = String(data.vendor_bill_no || '').trim();
+    const makeGrade = String(data.make_grade || '').trim();
+    const receivedBy = String(data.received_by || '').trim();
+    const stockUnit = chemical ? chemical.packageUnit : data.unit || 'Piece';
     const productId = await productIdFor(conn, name, itemType, stockUnit, minimumStock);
     const [result] = await conn.query(`
       INSERT INTO inventory_items(
-        product_id,asset_code,name,item_type,category,description,serial_number,
+        product_id,chemical_id,vendor_id,asset_code,name,item_type,category,description,serial_number,
         quantity,unit,status,location,batch_number,manufacturer,
         vendor_name,vendor_bill_no,make_grade,received_by,received_date,expiry_date,
         chemical_form,container_capacity,container_unit
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       productId,
+      chemicalMaster?.id || null,
+      vendorMaster?.id || null,
       assetCode,
       name,
       itemType,
@@ -388,11 +416,6 @@ async function disposeStock(id, rawQuantity, note, user) {
 }
 
 async function update(id, data, user) {
-  const chemical = chemicalDetails(data);
-  const name = String(data.name || '').trim();
-  if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
-  const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
-  const minimumStock = normalizeMinimumStock(data.minimum_stock);
   const conn = await db.getConnection();
   let old;
   try {
@@ -406,6 +429,16 @@ async function update(id, data, user) {
     if (!rows.length) throw new Error('NOT_FOUND');
     old = rows[0];
     if (old.status === 'RETIRED') throw new Error('RETIRED_ITEM');
+    const chemicalForm = String(data.chemical_form || '').toUpperCase();
+    const chemicalMaster = chemicalForm
+      ? await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER')
+      : null;
+    const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
+    const chemical = chemicalDetails(data, chemicalMaster?.name);
+    const name = chemical ? chemicalMaster.name : String(data.name || '').trim();
+    if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
+    const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
+    const minimumStock = normalizeMinimumStock(data.minimum_stock);
     if (Boolean(chemical) !== Boolean(old.chemical_form)) throw new Error('CHEMICAL_TYPE_IMMUTABLE');
     const stockUnit = chemical ? chemical.packageUnit : data.unit || old.unit;
     if (stockUnit !== old.unit) throw new Error('ITEM_UNIT_IMMUTABLE');
@@ -424,7 +457,8 @@ async function update(id, data, user) {
       );
       if (Number(assignmentCount.count) > 0 && (
         chemical.form !== old.chemical_form ||
-        name !== old.name ||
+        Number(chemicalMaster.id) !== Number(old.chemical_id) ||
+        name !== (old.chemical_master_name || old.name) ||
         chemical.batchNumber !== old.batch_number ||
         chemical.expiryDate !== old.expiry_date ||
         Number(chemical.capacity) !== Number(old.container_capacity) ||
@@ -439,20 +473,22 @@ async function update(id, data, user) {
       await conn.query('UPDATE inventory_products SET minimum_stock=? WHERE id=?', [minimumStock, productId]);
     }
     const receivedDate = String(data.received_date || '').trim();
-    const vendorName = String(data.vendor_name || '').trim();
+    const vendorName = vendorMaster?.name || null;
     const vendorBillNo = String(data.vendor_bill_no || '').trim();
     const makeGrade = String(data.make_grade || '').trim();
     const receivedBy = String(data.received_by || '').trim();
 
     await conn.query(`
       UPDATE inventory_items SET
-        product_id=?,name=?,item_type=?,description=?,serial_number=?,
+        product_id=?,chemical_id=?,vendor_id=?,name=?,item_type=?,description=?,serial_number=?,
         unit=?,location=?,batch_number=?,manufacturer=?,
         vendor_name=?,vendor_bill_no=?,make_grade=?,received_by=?,received_date=?,expiry_date=?,
         chemical_form=?,container_capacity=?,container_unit=?
       WHERE id=?
     `, [
       productId,
+      chemicalMaster?.id || null,
+      vendorMaster?.id || null,
       name,
       itemType,
       data.description || null,
