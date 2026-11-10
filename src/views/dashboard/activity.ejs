@@ -1,0 +1,181 @@
+<%
+function safeDetails(raw) {
+  let value = raw;
+  if (typeof value === 'string') {
+    try {
+      value = JSON.parse(value);
+    } catch (error) {
+      return [{ label: 'Details', value: 'Details are unavailable.' }];
+    }
+  }
+  const blocked = /password|hash|token|secret|session|ip.?address/i;
+  const entries = [];
+  function visit(object, prefix, depth) {
+    if (!object || typeof object !== 'object' || depth > 3) {
+      entries.push({ label: prefix, value: display(object) });
+      return;
+    }
+    for (const [key, entry] of Object.entries(object)) {
+      if (blocked.test(key)) continue;
+      const label = prefix ? `${prefix} · ${key.replace(/_/g, ' ')}` : key.replace(/_/g, ' ');
+      if (entry && typeof entry === 'object') visit(entry, label, depth + 1);
+      else entries.push({ label, value: display(entry) });
+    }
+  }
+  function display(entry) {
+    if (entry == null || entry === '') return '—';
+    if (typeof entry === 'boolean') return entry ? 'Yes' : 'No';
+    return String(entry);
+  }
+  if (value && typeof value === 'object') visit(value, '', 0);
+  else if (value != null && value !== '') entries.push({ label: 'Details', value: display(value) });
+  return entries;
+}
+function pageUrl(page) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (key !== 'page' && value) params.set(key, value);
+  }
+  params.set('page', page);
+  return `/activity-history?${params.toString()}`;
+}
+function displayTime(value) {
+  return String(value || '').replace('T', ' ').replace(/\.\d+Z?$/, '');
+}
+%>
+<div class="page-head activity-page-head">
+  <div>
+    <div class="eyebrow">TRACEABILITY</div>
+    <h1>Activity &amp; History</h1>
+    <p class="muted">A company-wide view of inventory transactions and recorded administrative activity.</p>
+  </div>
+</div>
+
+<% if(errors.length){ %>
+  <div class="flash error activity-errors"><%= errors.join(' ') %></div>
+<% } %>
+
+<section class="activity-summary" aria-label="Activity summary">
+  <article class="activity-stat">
+    <span class="activity-stat-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"></circle><path d="M12 7v5l3 2"></path></svg></span>
+    <div><small>Total activities</small><strong><%= Number(summary.total).toLocaleString() %></strong></div>
+  </article>
+  <article class="activity-stat">
+    <span class="activity-stat-icon inventory" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"></path><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"></path></svg></span>
+    <div><small>Inventory</small><strong><%= Number(summary.inventory).toLocaleString() %></strong></div>
+  </article>
+  <article class="activity-stat">
+    <span class="activity-stat-icon admin" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1a5.5 5.5 0 0 1 11 0v1M16 5.5a3 3 0 0 1 0 5.8M18 14a4.5 4.5 0 0 1 2.5 4v1"></path></svg></span>
+    <div><small>Administrative</small><strong><%= Number(summary.administrative).toLocaleString() %></strong></div>
+  </article>
+  <article class="activity-stat">
+    <span class="activity-stat-icon system" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M12 3 19 6v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3Z"></path><path d="m9 12 2 2 4-4"></path></svg></span>
+    <div><small>System</small><strong><%= Number(summary.system).toLocaleString() %></strong></div>
+  </article>
+</section>
+<p class="activity-summary-note">Summary totals follow the selected date range.</p>
+
+<form class="card activity-filter-card" method="get" action="/activity-history">
+  <div class="activity-search-row">
+    <label class="activity-search-field">Search activities
+      <input type="search" name="q" value="<%= filters.q %>" placeholder="Item, batch, vendor, PO, activity, or person">
+    </label>
+    <label>Category
+      <select name="category">
+        <option value="">All activities</option>
+        <% ['Inventory','Administrative','System'].forEach(category=>{ %>
+          <option value="<%= category %>" <%= filters.category===category?'selected':'' %>><%= category %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>Activity type
+      <select name="action">
+        <option value="">All types</option>
+        <% actions.forEach(action=>{ %>
+          <option value="<%= action.action %>" <%= filters.action===action.action?'selected':'' %>><%= action.activity %></option>
+        <% }) %>
+      </select>
+    </label>
+    <label>Performed by
+      <select name="actor">
+        <option value="">Anyone</option>
+        <% actors.forEach(actor=>{ %>
+          <option value="<%= actor %>" <%= filters.actor===actor?'selected':'' %>><%= actor %></option>
+        <% }) %>
+      </select>
+    </label>
+  </div>
+  <div class="activity-filter-row">
+    <label>From
+      <input type="date" name="from" value="<%= filters.from %>">
+    </label>
+    <label>To
+      <input type="date" name="to" value="<%= filters.to %>">
+    </label>
+    <div class="activity-filter-actions">
+      <button class="primary" type="submit">Apply filters</button>
+      <a class="secondary button" href="/activity-history">Clear filters</a>
+    </div>
+  </div>
+</form>
+
+<section class="card activity-table-card">
+  <div class="activity-table-heading">
+    <div>
+      <h2>Activity records</h2>
+      <p class="muted"><%= total.toLocaleString() %> matching activities</p>
+    </div>
+    <% if(pageCount>1){ %>
+      <span class="activity-page-count">Page <%= filters.page %> of <%= pageCount %></span>
+    <% } %>
+  </div>
+  <div class="activity-table-scroll">
+    <table class="activity-table">
+      <thead><tr>
+        <th>Date &amp; time</th><th>Category</th><th>Activity</th><th>Item / record</th>
+        <th>Quantity</th><th>Affected user</th><th>Performed by</th><th>Details</th>
+      </tr></thead>
+      <tbody>
+      <% if(!rows.length){ %>
+        <tr><td colspan="8" class="empty activity-empty"><strong>No activities found</strong><span>Try adjusting your search or filters.</span></td></tr>
+      <% } %>
+      <% rows.forEach(row=>{ const details=safeDetails(row.details); %>
+        <tr>
+          <td class="activity-time"><%= displayTime(row.created_at) %></td>
+          <td><span class="activity-category <%= row.category.toLowerCase() %>"><%= row.category %></span></td>
+          <td class="activity-name">
+            <span class="activity-row-icon <%= row.category.toLowerCase() %>" aria-hidden="true">
+              <% if(row.category==='Inventory'){ %><svg viewBox="0 0 24 24"><path d="m12 3 8 4.5v9L12 21l-8-4.5v-9L12 3Z"></path><path d="m4.5 7.8 7.5 4.4 7.5-4.4M12 12.2V21"></path></svg>
+              <% }else if(row.category==='Administrative'){ %><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"></circle><path d="M3.5 19v-1a5.5 5.5 0 0 1 11 0v1M16 5.5a3 3 0 0 1 0 5.8M18 14a4.5 4.5 0 0 1 2.5 4v1"></path></svg>
+              <% }else{ %><svg viewBox="0 0 24 24"><path d="M12 3 19 6v5c0 4.6-2.8 8-7 10-4.2-2-7-5.4-7-10V6l7-3Z"></path><path d="m9 12 2 2 4-4"></path></svg><% } %>
+            </span>
+            <span><%= row.activity %></span>
+          </td>
+          <td class="activity-record">
+            <strong><%= row.record_name || '—' %></strong>
+            <% if(row.record_identifier){ %><small><%= row.record_identifier %></small><% } %>
+          </td>
+          <td class="activity-quantity"><% if(row.quantity!=null){ %><%= row.quantity %> <%= row.unit || '' %><% } %></td>
+          <td><%= row.affected_user || '' %></td>
+          <td><%= row.actor_name || 'System' %></td>
+          <td class="activity-details">
+            <% if(details.length){ %>
+              <details>
+                <summary>View</summary>
+                <dl><% details.forEach(detail=>{ %><div><dt><%= detail.label || 'Details' %></dt><dd><%= detail.value %></dd></div><% }) %></dl>
+              </details>
+            <% } else { %><span class="muted">—</span><% } %>
+          </td>
+        </tr>
+      <% }) %>
+      </tbody>
+    </table>
+  </div>
+  <% if(pageCount>1){ %>
+    <nav class="activity-pagination" aria-label="Activity pages">
+      <% if(filters.page>1){ %><a class="secondary button" href="<%= pageUrl(filters.page-1) %>">Previous</a><% } else { %><span></span><% } %>
+      <span>Showing <%= ((filters.page-1)*pageSize)+1 %>–<%= Math.min(filters.page*pageSize,total) %> of <%= total %></span>
+      <% if(filters.page<pageCount){ %><a class="secondary button" href="<%= pageUrl(filters.page+1) %>">Next</a><% } else { %><span></span><% } %>
+    </nav>
+  <% } %>
+</section>

@@ -48,7 +48,7 @@
           </td>
           <td><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td>
           <td class="actions">
-            <a href="/inventory/<%= i.id %>/history">History</a>
+            <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %><a href="/inventory/<%= i.id %>/history">History</a><% } %>
             <% if(user.permissions.includes('INVENTORY_CREATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/restock">Add stock</a><% } %>
             <% if(user.permissions.includes('INVENTORY_UPDATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/edit">Edit</a><% } %>
             <% if(user.permissions.includes('INVENTORY_DELETE')&&i.status!=='RETIRED'){ %>

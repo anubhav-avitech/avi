@@ -70,6 +70,12 @@ async function update(id, data, actor) {
     employee_code: data.employee_code,
     role: target.role_name
   }, actor.ip);
+  if (data.password) {
+    await audit(actor.id, 'PASSWORD_CHANGED', 'users', id, {
+      name: target.name,
+      employee_code: target.employee_code
+    }, actor.ip);
+  }
 }
 
 async function remove(id, actor) {
@@ -82,7 +88,7 @@ async function remove(id, actor) {
     await conn.beginTransaction();
 
     const [targets] = await conn.query(`
-      SELECT u.id,u.name,u.email,u.status,r.name AS role_name
+      SELECT u.id,u.employee_code,u.name,u.email,u.status,r.name AS role_name
       FROM users u
       JOIN roles r ON r.id=u.role_id
       WHERE u.id=?
@@ -104,8 +110,10 @@ async function remove(id, actor) {
 
     await conn.query(`
       INSERT INTO audit_logs(actor_id,action,entity_type,entity_id,details,ip_address)
-      VALUES(?,'USER_DELETED','users',NULL,JSON_OBJECT('history_unlinked',true),?)
-    `, [actor.id, actor.ip || null]);
+      VALUES(?,'USER_DELETED','users',?,JSON_OBJECT(
+        'name',?,'employee_code',?,'role',?,'history_unlinked',true
+      ),?)
+    `, [actor.id, target.id, target.name, target.employee_code, target.role_name, actor.ip || null]);
     await conn.query('DELETE FROM users WHERE id=?', [targetId]);
 
     await conn.commit();

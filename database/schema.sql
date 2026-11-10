@@ -173,7 +173,8 @@ CREATE TABLE purchase_order_history (
   FOREIGN KEY(purchase_order_id) REFERENCES purchase_orders(id) ON DELETE SET NULL,
   FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_purchase_order_history_order(purchase_order_id),
-  INDEX idx_purchase_order_history_created(created_at)
+  INDEX idx_purchase_order_history_created(created_at),
+  INDEX idx_purchase_order_history_action_created(action,created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE inventory_items (
@@ -258,7 +259,8 @@ CREATE TABLE inventory_transactions (
   FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_transaction_inventory(inventory_id),
   INDEX idx_transaction_employee(employee_id),
-  INDEX idx_transaction_created(created_at)
+  INDEX idx_transaction_created(created_at),
+  INDEX idx_transaction_action_created(action,created_at)
 ) ENGINE=InnoDB;
 
 CREATE TABLE audit_logs (
@@ -272,7 +274,8 @@ CREATE TABLE audit_logs (
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(actor_id) REFERENCES users(id) ON DELETE SET NULL,
   INDEX idx_audit_created(created_at),
-  INDEX idx_audit_actor(actor_id)
+  INDEX idx_audit_actor(actor_id),
+  INDEX idx_audit_action_created(action,created_at)
 ) ENGINE=InnoDB;
 
 INSERT INTO roles(name,description) VALUES

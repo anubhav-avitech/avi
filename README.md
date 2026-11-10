@@ -8,8 +8,8 @@ The system has two application roles. Inventory access is company-wide; there
 is no department tracking or department-based scoping.
 
 ### Administrator
-- Manage users and review audit logs.
-- View inventory and history, edit and retire items, and return assigned equipment.
+- Manage users and review the Activity & History page for inventory, administrative, and system events.
+- View inventory, edit and retire items, and return assigned equipment.
 - Create, edit and permanently delete user accounts. Assignment, transaction and audit history is retained when a user is deleted.
 
 ### Inventory User
@@ -128,6 +128,13 @@ and units; links past assignment/return transactions to their assignments; adds
 consumption and stock movement ledger actions; and removes department columns
 and department scoping. Newly added product minimum-stock thresholds default to
 zero and can be configured from each product's inventory edit form.
+
+For an existing installation, add the Activity & History filtering indexes
+without changing existing records:
+
+```bash
+mysql -u root -p < database/migrate-activity-history-indexes.sql
+```
 
 For an existing installation already using the inventory overview schema, back
 up the database and then run the master-data migration:

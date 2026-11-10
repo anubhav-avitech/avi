@@ -8,6 +8,8 @@ const purchaseOrders = require('../services/purchase-order.service');
 const users = require('../services/user.service');
 const employeeDirectory = require('../services/employee.service');
 const { dashboard } = require('../services/dashboard.service');
+const activity = require('../services/activity.service');
+const { audit } = require('../services/audit.service');
 const { requireAuth, requirePermission, requireAdmin } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/security');
 
@@ -337,11 +339,12 @@ router.get('/login', (req, res) => {
 
 router.post('/login', loginLimiter, async (req, res, next) => {
   try {
-    const email = String(req.body.email || '').trim().toLowerCase();
+    const email = String(req.body.email || '').trim().toLowerCase().slice(0, 254);
     const password = String(req.body.password || '');
     const user = await auth.login(email, password);
 
     if (!user) {
+      await audit(null, 'FAILED_LOGIN', 'authentication', null, { username: email }, req.ip);
       return res.status(401).render('auth/login', {
         title: 'Sign in',
         error: 'Invalid email or password.'
@@ -359,7 +362,11 @@ router.post('/login', loginLimiter, async (req, res, next) => {
       };
       req.session.save(saveErr => {
         if (saveErr) return next(saveErr);
-        res.redirect('/');
+        audit(user.id, 'USER_LOGIN', 'system', null, null, req.ip)
+          .then(() => res.redirect('/'))
+          .catch(error => {
+            req.session.destroy(() => next(error));
+          });
       });
     });
   } catch (error) {
@@ -367,8 +374,16 @@ router.post('/login', loginLimiter, async (req, res, next) => {
   }
 });
 
-router.post('/logout', requireAuth, (req, res) => {
-  req.session.destroy(() => res.redirect('/login'));
+router.post('/logout', requireAuth, async (req, res, next) => {
+  try {
+    await audit(req.session.user.id, 'USER_LOGOUT', 'system', null, null, req.ip);
+    req.session.destroy(error => {
+      if (error) return next(error);
+      res.redirect('/login');
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 router.get('/', requireAuth, requirePermission('DASHBOARD_VIEW'), async (req, res, next) => {
@@ -661,24 +676,26 @@ router.get('/inventory/:id/history', requireAuth, requirePermission('INVENTORY_V
       return res.status(403).render('errors/403', { title: 'Access denied' });
     }
 
-    const rows = await inventory.transactionsForItem(req.session.user, req.params.id);
-
-    res.render('dashboard/history', { title: 'Inventory history', item, rows });
+    if (req.session.user.role_name !== 'Administrator' || !req.session.user.permissions.includes('AUDIT_VIEW')) {
+      return res.status(403).render('errors/403', { title: 'Access denied' });
+    }
+    res.redirect(`/activity-history?q=${encodeURIComponent(item.asset_code || item.name)}`);
   } catch (error) {
     next(error);
   }
 });
 
-router.get('/history', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
+router.get('/activity-history', requireAuth, requireAdmin, requirePermission('AUDIT_VIEW'), async (req, res, next) => {
   try {
-    res.render('dashboard/history', {
-      title: 'Inventory history',
-      item: null,
-      rows: await inventory.transactions(req.session.user)
-    });
+    const data = await activity.list(req.query);
+    res.render('dashboard/activity', { title: 'Activity & History', ...data });
   } catch (error) {
     next(error);
   }
+});
+
+router.get('/history', requireAuth, requireAdmin, requirePermission('AUDIT_VIEW'), (req, res) => {
+  res.redirect('/activity-history');
 });
 
 router.get('/assignments', requireAuth, async (req, res, next) => {
@@ -807,7 +824,7 @@ router.post('/assignments/:id/return', requireAuth, requirePermission('ASSIGNMEN
 // User and audit administration remain administrator-only.
 router.get('/users', requireAuth, requireAdmin, requirePermission('USERS_VIEW'), async (req, res, next) => {
   try {
-    res.render('users/index', { title: 'Users', rows: await users.list(req.session.user) });
+    res.render('users/index', { title: 'Inventory Team', rows: await users.list(req.session.user) });
   } catch (error) {
     next(error);
   }
@@ -886,19 +903,8 @@ router.post('/users/:id/delete', requireAuth, requireAdmin, requirePermission('U
   }
 });
 
-router.get('/audit', requireAuth, requireAdmin, requirePermission('AUDIT_VIEW'), async (req, res, next) => {
-  try {
-    const [rows] = await db.query(`
-      SELECT a.*,u.name AS actor_name
-      FROM audit_logs a
-      LEFT JOIN users u ON u.id=a.actor_id
-      ORDER BY a.created_at DESC
-      LIMIT 300
-    `);
-    res.render('dashboard/audit', { title: 'Audit log', rows });
-  } catch (error) {
-    next(error);
-  }
+router.get('/audit', requireAuth, requireAdmin, requirePermission('AUDIT_VIEW'), (req, res) => {
+  res.redirect('/activity-history');
 });
 
 module.exports = router;

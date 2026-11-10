@@ -94,14 +94,14 @@
     <% if(data.expiringBatches.length){ %>
       <div class="overview-list">
         <% data.expiringBatches.forEach(batch=>{ const days=Number(batch.days_to_expiry); const severity=days<0?'critical':days<=7?'urgent':days<=15?'warning':'upcoming'; const label=days<0?`Expired ${Math.abs(days)}d ago`:days===0?'Today':`In ${days}d`; %>
-          <a class="overview-row overview-expiry-row" href="/inventory/<%= batch.id %>/history">
+          <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %><a class="overview-row overview-expiry-row" href="/inventory/<%= batch.id %>/history"><% } else { %><div class="overview-row overview-expiry-row"><% } %>
             <span class="overview-row-main">
               <strong><%= batch.name %></strong>
               <small>Batch <%= batch.batch_number||'—' %> · <%= batch.location||'No location' %></small>
             </span>
             <span class="overview-row-value"><strong><%= batch.expiry_date %></strong><small><%= Number(batch.central_quantity).toLocaleString() %> <%= batch.unit %> central<% if(Number(batch.assigned_quantity)>0){ %> · <%= Number(batch.assigned_quantity).toLocaleString() %> held<% } %></small></span>
             <span class="overview-pill expiry-badge <%= severity %>"><%= label %></span>
-          </a>
+          <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %></a><% } else { %></div><% } %>
         <% }) %>
       </div>
     <% }else{ %><p class="overview-empty">No expiry alerts</p><% } %>
@@ -129,16 +129,16 @@
   <section class="card overview-card" id="recent-activity">
     <div class="overview-card-head">
       <h2>Recent activity</h2>
-      <% if(user.permissions.includes('INVENTORY_VIEW')){ %><a href="/history">History</a><% } %>
+      <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %><a href="/activity-history">View all</a><% } %>
     </div>
     <% if(data.recentActivity.length){ %>
       <div class="overview-list">
         <% data.recentActivity.forEach(activity=>{ const labels={ADD:'Stock added',ASSIGN:'Stock assigned',CONSUME:'Consumed',RETURN:'Returned',ADJUST:'Adjusted',DISPOSE:'Disposed',UPDATE:'Item updated',STATUS_CHANGE:'Status changed',RETIRE:'Retired'}; %>
-          <a class="overview-row overview-activity-row" href="/inventory/<%= activity.inventory_id %>/history">
+          <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %><a class="overview-row overview-activity-row" href="/inventory/<%= activity.inventory_id %>/history"><% } else { %><div class="overview-row overview-activity-row"><% } %>
             <span class="activity-mark <%= activity.action.toLowerCase() %>"></span>
             <span class="overview-row-main"><strong><%= labels[activity.action]||activity.action %> · <%= activity.item_name %></strong><small><% if(activity.employee_name){ %><%= activity.employee_name %> · <% } %>by <%= activity.actor_name %> · <%= activity.created_at %></small></span>
             <span class="overview-row-value"><strong><%= activity.quantity===null?'—':Number(activity.quantity).toLocaleString() %> <%= activity.unit||'' %></strong></span>
-          </a>
+          <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %></a><% } else { %></div><% } %>
         <% }) %>
       </div>
     <% }else{ %><p class="overview-empty">No recent activity</p><% } %>

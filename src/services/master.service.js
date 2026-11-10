@@ -138,6 +138,8 @@ async function remove(type, rawId, actor) {
   const id = normalizeId(rawId);
   if (!id) throw new Error('NOT_FOUND');
   const referenceColumn = type === 'chemicals' ? 'chemical_id' : 'vendor_id';
+  const [records] = await db.query(`SELECT name FROM ${config.table} WHERE id=?`, [id]);
+  if (!records.length) throw new Error('NOT_FOUND');
   const [[references]] = await db.query(
     `SELECT COUNT(*) AS count FROM inventory_items WHERE ${referenceColumn}=?`,
     [id]
@@ -145,7 +147,9 @@ async function remove(type, rawId, actor) {
   if (Number(references.count)) throw new Error('MASTER_IN_USE');
   const [result] = await db.query(`DELETE FROM ${config.table} WHERE id=?`, [id]);
   if (!result.affectedRows) throw new Error('NOT_FOUND');
-  await audit(actor.id, `${type.toUpperCase()}_DELETED`, config.table, id, null, actor.ip);
+  await audit(actor.id, `${type.toUpperCase()}_DELETED`, config.table, id, {
+    name: records[0].name
+  }, actor.ip);
 }
 
 module.exports = { list, get, create, update, remove, configFor, fields: type => configFor(type).fields };
