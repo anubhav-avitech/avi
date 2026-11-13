@@ -11,12 +11,15 @@
     .print-toolbar a,.print-toolbar button{padding:8px 14px;border:1px solid #cbd0d7;border-radius:4px;background:#fff;color:#20242a;font:inherit;text-decoration:none;cursor:pointer}
     .print-sheet{display:flex;flex-direction:column;width:210mm;min-height:297mm;margin:0 auto 20px;padding:13mm 15mm 11mm;background:#fff}
     .po-header{position:relative;display:flex;min-height:32mm;align-items:flex-start;justify-content:center;text-align:center}
-    .po-logo{position:absolute;top:0;left:0;max-width:38mm;max-height:22mm;object-fit:contain}
+    .po-logo{position:absolute;top:0;left:0;max-width:56mm;max-height:19mm;object-fit:contain}
     .po-company{max-width:125mm;padding:1mm 0 0}
-    .po-company h1{margin:0 0 2mm;font-size:12px;font-weight:700;letter-spacing:.025em}
+    .po-company h1{margin:0 0 2mm;font-size:14px;font-weight:700;letter-spacing:.025em}
     .po-company p{margin:.5mm 0;font-size:9px}
-    .po-title-row{margin:2mm 0 4mm;text-align:center}
-    .po-title-row h2{margin:0 0 1.5mm;font-size:11px;text-decoration:underline;text-underline-offset:2px}
+    .po-title-row{margin:0 0 4mm;text-align:center}
+    .po-title-row .po-company{max-width:none;padding:0}
+    .po-title-row .po-company h1{margin:0 0 1mm;font-size:14px}
+    .po-title-row .po-company p{margin:0;font-size:9px}
+    .po-title-row h2{margin:7mm 0 1.5mm;font-size:11px;text-decoration:underline;text-underline-offset:2px}
     .po-number{display:flex;justify-content:center;gap:12mm;font-size:9px}
     .po-parties{margin:0 0 5mm}
     .po-party h3{margin:0 0 1mm;font-size:9px;font-weight:400}
@@ -50,14 +53,14 @@
   <main class="print-sheet">
     <header class="po-header">
       <img class="po-logo" src="<%= order.company_logo_path %>" alt="<%= order.company_name %>">
+    </header>
+    <div class="po-title-row">
       <div class="po-company">
         <h1><%= order.company_name %></h1>
         <% if(order.company_address){ %><p><%= order.company_address %></p><% } %>
         <% if(order.company_contact_number){ %><p>Phone: <%= order.company_contact_number %><% if(order.company_email){ %> · E-mail: <%= order.company_email %><% } %></p><% }else if(order.company_email){ %><p>E-mail: <%= order.company_email %></p><% } %>
         <% if(order.company_tax_registration_number){ %><p>GST NO. <%= order.company_tax_registration_number %></p><% } %>
       </div>
-    </header>
-    <div class="po-title-row">
       <h2>PURCHASE/WORK ORDER</h2>
       <div class="po-number"><span>Purchase Order No: <strong><%= order.po_number %></strong></span><span>Date: <%= order.order_date %></span></div>
     </div>
