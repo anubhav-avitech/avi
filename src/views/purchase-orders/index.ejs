@@ -9,7 +9,7 @@
   <input name="q" value="<%= query %>" placeholder="Search PO number or vendor…" aria-label="Search purchase orders">
   <label>From<input type="date" name="from" value="<%= from %>"></label>
   <label>To<input type="date" name="to" value="<%= to %>"></label>
-  <button class="secondary">Filter</button>
+  <button class="secondary">Search</button>
   <% if(query||from||to){ %><a class="secondary button" href="/purchase-orders">Clear</a><% } %>
 </form>
 <% if(filterErrors.range){ %><p class="field-error po-filter-error"><%= filterErrors.range %></p><% } %>

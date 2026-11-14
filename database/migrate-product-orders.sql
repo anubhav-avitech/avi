@@ -33,7 +33,7 @@ CREATE TABLE IF NOT EXISTS purchase_orders (
   company_logo_path VARCHAR(255) NOT NULL,
   company_jurisdiction VARCHAR(150) NULL,
   total_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
-  advance_percent DECIMAL(5,2) NOT NULL DEFAULT 0,
+  advance_percent DECIMAL(5,2) NULL DEFAULT NULL,
   advance_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
   remaining_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
   payment_conditions VARCHAR(1000) NULL,

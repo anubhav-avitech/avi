@@ -1,24 +1,143 @@
-<header class="topbar">
-  <a class="brand" href="/" aria-label="Avitech Nutrition inventory home"><img class="brand-logo" src="/logo.png" alt="Avitech Nutrition"></a>
-  <nav>
-    <a class="<%= path==='/'?'active':'' %>" href="/">Overview</a>
-    <% if((user.permissions || []).includes('INVENTORY_VIEW')){ %>
-      <a class="<%= path.startsWith('/inventory')&&!path.startsWith('/inventory/batches')?'active':'' %>" href="/inventory">Inventory</a>
-      <a class="<%= path.startsWith('/inventory/batches')?'active':'' %>" href="/inventory/batches">Batch receiving records</a>
-    <% } %>
-    <% if((user.role_name==='Inventory User'||user.role_name==='Administrator')&&(user.permissions.includes('ASSIGNMENT_CREATE')||user.permissions.includes('ASSIGNMENT_RETURN')||user.permissions.includes('ASSIGNMENT_CONSUME'))){ %>
-      <a class="<%= path.startsWith('/assignments')?'active':'' %>" href="/assignments">Assignments</a>
-    <% } %>
-    <% if(user.role_name==='Administrator'){ %>
-      <a class="<%= path==='/master/chemicals'||path.startsWith('/master/chemicals/')?'active':'' %>" href="/master/chemicals">Chemical master</a>
-      <a class="<%= path==='/master/vendors'||path.startsWith('/master/vendors/')?'active':'' %>" href="/master/vendors">Vendor master</a>
-      <a class="<%= path.startsWith('/purchase-orders')?'active':'' %>" href="/purchase-orders">Purchase orders</a>
-      <% if(user.permissions.includes('USERS_VIEW')){ %><a class="<%= path.startsWith('/users')?'active':'' %>" href="/users">Inventory Team</a><% } %>
-      <% if(user.permissions.includes('AUDIT_VIEW')){ %><a class="<%= path==='/activity-history'?'active':'' %>" href="/activity-history">Activity &amp; History</a><% } %>
-    <% } %>
+
+<%
+  const permissions = user.permissions || [];
+  const isAdmin = user.role_name === 'Administrator';
+
+  const hasPermission = (permission) =>
+    permissions.includes(permission);
+
+  const hasAnyPermission = (required) =>
+    required.some(hasPermission);
+
+  const isActive = (route, exact = false) =>
+    exact ? path === route : path === route || path.startsWith(route + '/');
+
+  const navigation = [
+    {
+      label: 'Overview',
+      href: '/',
+      icon: '<rect x="3" y="3" width="8" height="8" rx="1.5"/><rect x="13" y="3" width="8" height="5" rx="1.5"/><rect x="13" y="10" width="8" height="11" rx="1.5"/><rect x="3" y="13" width="8" height="8" rx="1.5"/>',
+      exact: true
+    },
+    {
+      label: 'Inventory',
+      href: '/inventory',
+      permission: 'INVENTORY_VIEW',
+      icon: '<path d="m3 7 9-4 9 4-9 4-9-4Z"/><path d="m3 12 9 4 9-4M3 17l9 4 9-4"/>'
+    },
+    {
+      label: 'Batch receiving records',
+      href: '/inventory/batches',
+      permission: 'INVENTORY_VIEW',
+      icon: '<path d="M4 4h16v16H4zM8 2v4m8-4v4M4 9h16"/><path d="m9 14 2 2 4-4"/>'
+    },
+    {
+      label: 'Assignments',
+      href: '/assignments',
+      roles: ['Inventory User', 'Administrator'],
+      anyPermission: [
+        'ASSIGNMENT_CREATE',
+        'ASSIGNMENT_RETURN',
+        'ASSIGNMENT_CONSUME'
+      ],
+      icon: '<path d="M9 5H5v16h14V5h-4"/><path d="M9 3h6v4H9zM8 13h8m-8 4h8"/>'
+    },
+    {
+      label: 'Chemical master',
+      href: '/master/chemicals',
+      admin: true,
+      icon: '<path d="M9 3h6m-5 0v7l-5 9a1.5 1.5 0 0 0 1.3 2h11.4a1.5 1.5 0 0 0 1.3-2l-5-9V3"/><path d="M7 16h10"/>'
+    },
+    {
+      label: 'Vendor master',
+      href: '/master/vendors',
+      admin: true,
+      icon: '<path d="M3 21h18M5 21V7l7-4 7 4v14M9 10h1m4 0h1m-6 4h1m4 0h1m-5 7v-4h2v4"/>'
+    },
+    {
+      label: 'Purchase orders',
+      href: '/purchase-orders',
+      admin: true,
+      icon: '<path d="M6 3h12v18l-2-1-2 1-2-1-2 1-2-1-2 1V3Z"/><path d="M9 8h6m-6 4h6m-6 4h4"/>'
+    },
+    {
+      label: 'Inventory Team',
+      href: '/users',
+      admin: true,
+      permission: 'USERS_VIEW',
+      icon: '<circle cx="9" cy="8" r="3"/><path d="M3 20v-1a6 6 0 0 1 12 0v1H3Zm13-9a3 3 0 1 0-1-5.8m2 8a5 5 0 0 1 4 5v1h-3"/>'
+    },
+    {
+      label: 'Activity &amp; History',
+      href: '/activity-history',
+      admin: true,
+      permission: 'AUDIT_VIEW',
+      exact: true,
+      icon: '<path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5m4-1v5l3 2"/>'
+    }
+  ];
+
+  const visibleNavigation = navigation.filter(item => {
+    if (item.admin && !isAdmin) return false;
+    if (item.roles && !item.roles.includes(user.role_name)) return false;
+    if (item.permission && !hasPermission(item.permission)) return false;
+    if (item.anyPermission && !hasAnyPermission(item.anyPermission)) return false;
+
+    return true;
+  });
+%>
+
+<aside class="sidebar">
+  <div class="sidebar-brand">
+    <a class="brand" href="/" aria-label="Avitech Nutrition inventory home">
+      <img class="brand-logo" src="/logo.png" alt="Avitech Nutrition">
+      <span class="brand-compact" aria-hidden="true">A</span>
+    </a>
+
+    <button
+      class="sidebar-toggle"
+      type="button"
+      aria-label="Collapse sidebar"
+      aria-expanded="true"
+      title="Collapse sidebar"
+    >
+      <svg viewBox="0 0 24 24" aria-hidden="true">
+        <path d="m14 18-6-6 6-6"/>
+      </svg>
+    </button>
+  </div>
+
+  <nav aria-label="Main navigation">
+    <% visibleNavigation.forEach(item => { %>
+      <a
+        class="<%= isActive(item.href, item.exact) ? 'active' : '' %>"
+        href="<%= item.href %>"
+        aria-label="<%= item.label.replace(/&amp;/g, '&') %>"
+        title="<%= item.label.replace(/&amp;/g, '&') %>"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <%- item.icon %>
+        </svg>
+
+        <span class="nav-label"><%- item.label %></span>
+      </a>
+    <% }) %>
   </nav>
+
   <div class="profile">
     <%- include('theme-toggle', { themeToggleClass: '' }) %>
-    <form method="post" action="/logout"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="ghost">Sign out</button></form>
+
+    <form method="post" action="/logout">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+
+      <button class="ghost" type="submit" aria-label="Sign out" title="Sign out">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M10 17l5-5-5-5m5 5H3"/>
+          <path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/>
+        </svg>
+
+        <span class="nav-label">Sign out</span>
+      </button>
+    </form>
   </div>
-</header>
+</aside>

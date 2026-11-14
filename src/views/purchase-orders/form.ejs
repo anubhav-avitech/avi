@@ -23,15 +23,15 @@
     <% Object.keys(errors).filter(key=>key.startsWith('product_')).forEach(key=>{ %><p class="field-error"><%= errors[key] %></p><% }) %>
     <div class="po-product-table-wrap">
       <table class="po-product-table">
-        <thead><tr><th>S.No.</th><th>Product name *</th><th>Description / specification</th><th>Quantity *</th><th>Unit *</th><th>Rate (₹) *</th><th>Amount (₹)</th><th></th></tr></thead>
+        <thead><tr><th>S.No.</th><th>Item name *</th><th>Product size *</th><th>Unit *</th><th>Quantity *</th><th>Price per piece (₹) *</th><th>Amount (₹)</th><th>Action</th></tr></thead>
         <tbody id="po_items">
           <% items.forEach((item,index)=>{ %>
             <tr class="po-product-row">
               <td class="po-row-number"><%= index+1 %></td>
               <td><input name="product_name" maxlength="200" value="<%= item.product_name||'' %>" aria-label="Product name" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="po_chemical_suggestions" autocomplete="off" data-po-chemical-input required></td>
-              <td><input name="description" maxlength="1000" value="<%= item.description||'' %>" aria-label="Description or specification"></td>
-              <td><input name="quantity" type="number" step="0.001" min="0.001" value="<%= item.quantity||'' %>" aria-label="Quantity" required></td>
+              <td><input name="product_size" maxlength="1000" value="<%= item.product_size || item.description || '' %>" aria-label="Product size" required></td>
               <td><input name="unit" list="po_units" maxlength="30" value="<%= item.unit||'' %>" aria-label="Unit" required></td>
+              <td><input name="quantity" type="number" step="0.001" min="0.001" value="<%= item.quantity||'' %>" aria-label="Quantity" required></td>
               <td><input name="rate" type="number" step="0.01" min="0" value="<%= item.rate??'' %>" aria-label="Rate in rupees" required></td>
               <td class="po-line-amount">₹0.00</td>
               <td><button class="link danger remove-po-row" type="button" aria-label="Remove product row">Remove</button></td>
@@ -49,13 +49,15 @@
     <div class="po-payment-grid">
       <label>Advance payment
         <select name="payment_mode" id="payment_mode">
-          <option value="none" <%= record.payment_mode==='none'?'selected':'' %>>No advance · 0%</option>
-          <option value="full" <%= record.payment_mode==='full'?'selected':'' %>>Full advance · 100%</option>
-          <option value="custom" <%= record.payment_mode==='custom'?'selected':'' %>>Custom percentage</option>
+          <option value="">Select payment %</option>
+          <option value="0" <%= record.advance_percent===0 || record.payment_mode==='0' ? 'selected' : '' %>>0%</option>
+          <option value="50" <%= Number(record.advance_percent)===50 || record.payment_mode==='50' ? 'selected' : '' %>>50%</option>
+          <option value="100" <%= Number(record.advance_percent)===100 || record.payment_mode==='100' ? 'selected' : '' %>>100%</option>
+          <option value="custom" <%= record.payment_mode==='custom' ? 'selected' : Number(record.advance_percent)>0 && Number(record.advance_percent)<100 && record.payment_mode !== '0' && record.payment_mode !== '50' && record.payment_mode !== '100' ? 'selected' : '' %>>Custom percentage</option>
         </select>
       </label>
       <label id="custom_advance_field">Custom advance percentage
-        <div class="po-percent-input"><input type="number" name="advance_percent" id="advance_percent" min="0" max="100" step="0.01" value="<%= record.advance_percent??0 %>"><span>%</span></div>
+        <div class="po-percent-input"><input type="number" name="advance_percent" id="advance_percent" min="0" max="100" step="0.01" value="<%= (record.advance_percent!=null && !['0','50','100'].includes(String(record.payment_mode)) && !(record.payment_mode==='')) ? record.advance_percent : '' %>"><span>%</span></div>
         <% if(errors.advance_percent){ %><span class="field-error"><%= errors.advance_percent %></span><% } %>
       </label>
       <div class="po-payment-value"><span>Advance payment</span><strong id="advance_amount">₹0.00</strong></div>
@@ -70,9 +72,9 @@
   <tr class="po-product-row">
     <td class="po-row-number"></td>
     <td><input name="product_name" maxlength="200" aria-label="Product name" role="combobox" aria-autocomplete="list" aria-haspopup="listbox" aria-expanded="false" aria-controls="po_chemical_suggestions" autocomplete="off" data-po-chemical-input required></td>
-    <td><input name="description" maxlength="1000" aria-label="Description or specification"></td>
-    <td><input name="quantity" type="number" step="0.001" min="0.001" aria-label="Quantity" required></td>
+    <td><input name="product_size" maxlength="1000" aria-label="Product size" required></td>
     <td><input name="unit" list="po_units" maxlength="30" aria-label="Unit" required></td>
+    <td><input name="quantity" type="number" step="0.001" min="0.001" aria-label="Quantity" required></td>
     <td><input name="rate" type="number" step="0.01" min="0" aria-label="Rate in rupees" required></td>
     <td class="po-line-amount">₹0.00</td>
     <td><button class="link danger remove-po-row" type="button" aria-label="Remove product row">Remove</button></td>
@@ -200,14 +202,15 @@
     const mode = document.getElementById('payment_mode').value;
     const customField = document.getElementById('custom_advance_field');
     const percentInput = document.getElementById('advance_percent');
-    const percentage = mode === 'none' ? 0 : mode === 'full' ? 100 : Number(percentInput.value) || 0;
+    const customValue = Number(percentInput.value || 0);
+    const percentage = mode === 'custom' ? customValue : Number(mode || 0);
     customField.hidden = mode !== 'custom';
     percentInput.required = mode === 'custom';
     percentInput.disabled = mode !== 'custom';
-    const advance = Math.round(total * percentage) / 100;
+    const advance = mode === '' ? 0 : Math.round(total * percentage) / 100;
     document.getElementById('po_total').textContent = currency(total);
-    document.getElementById('advance_amount').textContent = `${currency(advance)} (${percentage.toFixed(2)}%)`;
-    document.getElementById('remaining_amount').textContent = `${currency(Math.max(0,total-advance))} (${(100-percentage).toFixed(2)}%)`;
+    document.getElementById('advance_amount').textContent = `${currency(advance)}${mode === '' ? '' : ` (${percentage.toFixed(2)}%)`}`;
+    document.getElementById('remaining_amount').textContent = `${currency(Math.max(0,total-advance))}${mode === '' ? '' : ` (${(100-percentage).toFixed(2)}%)`}`;
   }
 
   vendorInput.addEventListener('input', syncVendor);

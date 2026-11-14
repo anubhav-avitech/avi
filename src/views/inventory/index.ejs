@@ -1,6 +1,6 @@
 <form class="toolbar" method="get">
   <input name="q" value="<%= query %>" placeholder="Search stock, batch, vendor or name…">
-  <button class="secondary">Search</button>
+  <button class="secondary">Filter</button>
   <% if(user.permissions.includes('INVENTORY_CREATE')){ %>
     <a class="primary button" href="/inventory/new">Add item</a>
   <% } %>

@@ -11,6 +11,7 @@ const DEFAULT_COMPANY = {
   logo_path: '/logo.png',
   jurisdiction: 'Gurugram jurisdiction'
 };
+const FIXED_COMPANY_NAME = DEFAULT_COMPANY.company_name;
 const MAX_AMOUNT_CENTS = 999999999999999;
 
 function normalizeId(value) {
@@ -49,23 +50,23 @@ function validateOrder(data) {
   if (!vendorId) errors.vendor_id = 'Select a registered vendor.';
 
   const productNames = rowsFrom(data.product_name);
-  const descriptions = rowsFrom(data.description);
+  const productSizes = rowsFrom(data.product_size || data.description);
   const quantities = rowsFrom(data.quantity);
   const units = rowsFrom(data.unit);
   const rates = rowsFrom(data.rate);
-  const count = Math.max(productNames.length, descriptions.length, quantities.length, units.length, rates.length);
+  const count = Math.max(productNames.length, productSizes.length, quantities.length, units.length, rates.length);
   if (!count) errors.items = 'Add at least one product.';
   const items = [];
   let totalCents = 0;
   if (count) {
     for (let index = 0; index < count; index += 1) {
       const productName = String(productNames[index] || '').trim();
-      const description = String(descriptions[index] || '').trim();
+      const productSize = String(productSizes[index] || '').trim();
       const quantityRaw = String(quantities[index] || '').trim();
       const unit = String(units[index] || '').trim();
       const rateRaw = String(rates[index] ?? '').trim();
       if (!productName || productName.length > 200) errors[`product_${index}`] = `Product ${index + 1} needs a name of 200 characters or fewer.`;
-      if (description.length > 1000) errors[`product_${index}`] = `Product ${index + 1} description must be 1,000 characters or fewer.`;
+      if (!productSize || productSize.length > 1000) errors[`product_${index}`] = `Product ${index + 1} needs a size of 1,000 characters or fewer.`;
       if (!/^(?:\d{1,9})(?:\.\d{1,3})?$/.test(quantityRaw) || Number(quantityRaw) <= 0) {
         errors[`product_${index}`] = `Product ${index + 1} needs a valid quantity greater than zero.`;
       }
@@ -87,22 +88,31 @@ function validateOrder(data) {
       items.push({
         serial_number: index + 1,
         product_name: productName,
-        description: description || null,
+        product_size: productSize || null,
         quantity,
         unit,
         rate,
-        amount: amountCents / 100
+        amount: amountCents / 100,
+        description: productSize || null
       });
     }
   }
 
-  const paymentMode = String(data.payment_mode || 'custom');
-  let advancePercent;
-  if (paymentMode === 'none') advancePercent = 0;
-  else if (paymentMode === 'full') advancePercent = 100;
-  else if (paymentMode === 'custom') {
+  const paymentMode = String(data.payment_mode || '').trim();
+  let advancePercent = null;
+  if (!paymentMode) {
+    advancePercent = null;
+  } else if (paymentMode === '0' || paymentMode === '0%') {
+    advancePercent = 0;
+  } else if (paymentMode === '50') {
+    advancePercent = 50;
+  } else if (paymentMode === '100') {
+    advancePercent = 100;
+  } else if (paymentMode === 'custom') {
     const raw = String(data.advance_percent ?? '').trim();
-    if (!/^(?:\d{1,3})(?:\.\d{1,2})?$/.test(raw) || Number(raw) < 0 || Number(raw) > 100) {
+    if (!raw) {
+      errors.advance_percent = 'Choose a payment percentage or enter a custom value.';
+    } else if (!/^(?:\d{1,3})(?:\.\d{1,2})?$/.test(raw) || Number(raw) < 0 || Number(raw) > 100) {
       errors.advance_percent = 'Advance payment must be between 0% and 100%.';
     } else {
       advancePercent = Number(raw);
@@ -120,16 +130,21 @@ function validateOrder(data) {
     error.fields = errors;
     throw error;
   }
-  const percentBasisPoints = BigInt(Math.round(advancePercent * 100));
-  const advanceCents = Number((BigInt(totalCents) * percentBasisPoints + 5000n) / 10000n);
+  const totalAmount = totalCents / 100;
+  const advanceAmount = advancePercent === null ? 0 : totalAmount * (advancePercent / 100);
+  const remainingAmount = totalAmount - advanceAmount;
   return {
     order_date: orderDate,
     vendor_id: vendorId,
-    items,
-    total_amount: totalCents / 100,
+    items: items.map(item => ({
+      ...item,
+      description: item.description || null,
+      product_size: item.product_size || null
+    })),
+    total_amount: totalAmount,
     advance_percent: advancePercent,
-    advance_amount: advanceCents / 100,
-    remaining_amount: (totalCents - advanceCents) / 100,
+    advance_amount: advanceAmount,
+    remaining_amount: remainingAmount,
     payment_conditions: paymentConditions || null,
     notes: notes || null
   };
@@ -142,24 +157,20 @@ async function companySettings(conn = db) {
 
 async function updateCompanySettings(data) {
   const values = {
-    company_name: String(data.company_name || '').trim(),
+    company_name: FIXED_COMPANY_NAME,
     address: String(data.address || '').trim(),
     contact_number: String(data.contact_number || '').trim(),
     email: String(data.email || '').trim(),
     tax_registration_number: String(data.tax_registration_number || '').trim(),
-    logo_path: String(data.logo_path || '').trim(),
+    logo_path: String(data.logo_path || '/logo.png').trim() || '/logo.png',
     jurisdiction: String(data.jurisdiction || '').trim()
   };
   const errors = {};
-  if (!values.company_name || values.company_name.length > 150) errors.company_name = 'Company name is required and must be 150 characters or fewer.';
   if (values.address.length > 500) errors.address = 'Address must be 500 characters or fewer.';
   if (values.contact_number.length > 30) errors.contact_number = 'Contact number must be 30 characters or fewer.';
   if (values.email && (values.email.length > 254 || !validator.isEmail(values.email))) errors.email = 'Enter a valid email address.';
   if (values.tax_registration_number.length > 30) errors.tax_registration_number = 'Tax registration number must be 30 characters or fewer.';
   if (values.jurisdiction.length > 150) errors.jurisdiction = 'Jurisdiction must be 150 characters or fewer.';
-  if (!/^\/(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9/_.,-]{0,254}$/.test(values.logo_path)) {
-    errors.logo_path = 'Logo path must be a local public path such as /logo.png.';
-  }
   if (Object.keys(errors).length) {
     const error = new Error('INVALID_COMPANY_SETTINGS');
     error.fields = errors;
@@ -233,7 +244,8 @@ async function insertItems(conn, orderId, items) {
     const batch = items.slice(offset, offset + 100);
     const values = [];
     const placeholders = batch.map(item => {
-      values.push(orderId, item.serial_number, item.product_name, item.description, item.quantity, item.unit, item.rate, item.amount);
+      const description = item.product_size || item.description || null;
+      values.push(orderId, item.serial_number, item.product_name, description, item.quantity, item.unit, item.rate, item.amount);
       return '(?,?,?,?,?,?,?,?)';
     });
     await conn.query(`

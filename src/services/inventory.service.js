@@ -198,6 +198,7 @@ async function chemicalBatches() {
 async function create(data, user) {
   const conn = await db.getConnection();
   let inventoryId;
+  let assetCode;
   try {
     await conn.beginTransaction();
     const form = String(data.chemical_form || '').toUpperCase();
@@ -208,7 +209,7 @@ async function create(data, user) {
     const chemical = chemicalDetails(data, chemicalMaster?.name);
     const quantity = normalizeStockQuantity(data.quantity, chemical);
     const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
-    const assetCode = `${chemical ? 'CHEM' : 'STK'}-${randomUUID().toUpperCase()}`;
+    assetCode = `${chemical ? 'CHEM' : 'STK'}-${randomUUID().toUpperCase()}`;
     const name = chemical ? chemicalMaster.name : String(data.name || '').trim();
     if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
     const minimumStock = normalizeMinimumStock(data.minimum_stock);

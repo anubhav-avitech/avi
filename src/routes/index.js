@@ -20,14 +20,14 @@ const masterType = type => ['chemicals', 'vendors'].includes(type) ? type : null
 const orderFormItems = data => {
   const list = value => Array.isArray(value) ? value : value === undefined ? [] : [value];
   const names = list(data.product_name);
-  const descriptions = list(data.description);
+  const productSizes = list(data.product_size || data.description);
   const quantities = list(data.quantity);
   const units = list(data.unit);
   const rates = list(data.rate);
-  const count = Math.max(names.length, descriptions.length, quantities.length, units.length, rates.length, 1);
+  const count = Math.max(names.length, productSizes.length, quantities.length, units.length, rates.length, 1);
   return Array.from({ length: count }, (_, index) => ({
     product_name: names[index] || '',
-    description: descriptions[index] || '',
+    product_size: productSizes[index] || '',
     quantity: quantities[index] || '',
     unit: units[index] || '',
     rate: rates[index] || ''
@@ -64,7 +64,7 @@ router.get('/purchase-orders/new', requireAuth, requireAdmin, async (req, res, n
       action: '/purchase-orders/new',
       vendors: await masters.list('vendors'),
       chemicals: await masters.list('chemicals'),
-      record: { order_date: new Date().toISOString().slice(0, 10), payment_mode: 'none', advance_percent: 0 },
+      record: { order_date: new Date().toISOString().slice(0, 10), payment_mode: '', advance_percent: '' },
       items: orderFormItems({}),
       errors: {},
       formError: null
@@ -138,7 +138,10 @@ router.get('/purchase-orders/:id/edit', requireAuth, requireAdmin, async (req, r
       chemicals: await masters.list('chemicals'),
       record: {
         ...record,
-        payment_mode: Number(record.advance_percent) === 0 ? 'none' : Number(record.advance_percent) === 100 ? 'full' : 'custom'
+        payment_mode: record.advance_percent === null || record.advance_percent === undefined || record.advance_percent === ''
+          ? ''
+          : Number(record.advance_percent) === 0 ? '0' : Number(record.advance_percent) === 50 ? '50' : Number(record.advance_percent) === 100 ? '100' : 'custom',
+        advance_percent: record.advance_percent === null || record.advance_percent === undefined || record.advance_percent === '' ? '' : Number(record.advance_percent)
       },
       items: record.items,
       errors: {},
