@@ -1,18 +1,23 @@
 <div class="page-head">
-  <div><div class="eyebrow">MASTER DATA</div><h1><%= title %></h1><p class="muted">Enter the <%= config.label.toLowerCase() %> details below.</p></div>
+  <div><div class="eyebrow">MASTER DATA</div><h1><%= title %></h1><p class="muted"><%= config.nameOnly?`Enter only the ${config.label.toLowerCase()} name here.`:`Enter the ${config.label.toLowerCase()} details below.` %></p></div>
   <a class="secondary button" href="/master/<%= type %>">Back</a>
 </div>
 <section class="card form-card master-form-card">
   <% if(typeof formError!=='undefined'&&formError){ %><p class="flash error" role="alert"><%= formError %></p><% } %>
   <form method="post" action="<%= action %>" class="grid-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <% fields.forEach(field=>{ const error=errors[field.name]; %>
-      <label class="<%= field.name==='address'?'span-2':'' %>">
+    <% fields.forEach(field=>{ const error=errors[field.name]; const value=record[field.name]??field.defaultValue??''; const hidden=field.dependsOn&&String(record[field.dependsOn]??field.defaultValue??'')!==field.dependsValue; %>
+      <label class="<%= field.type==='textarea'?'span-2':'' %>" <%= field.dependsOn?`data-dependent-field="${field.dependsOn}" data-dependent-value="${field.dependsValue}"`:'' %> <%= hidden?'hidden':'' %>>
         <%= field.label %><%= field.required?' *':'' %>
-        <% if(field.name==='address'){ %>
-          <textarea name="<%= field.name %>" maxlength="<%= field.maxLength %>" rows="3" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>><%= record[field.name]||'' %></textarea>
+        <% if(field.type==='textarea'){ %>
+          <textarea name="<%= field.name %>" maxlength="<%= field.maxLength %>" rows="3" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>><%= value %></textarea>
+        <% } else if(field.type==='select'){ %>
+          <select name="<%= field.name %>" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>>
+            <% if(!field.required){ %><option value="">Select…</option><% } %>
+            <% field.options.forEach(option=>{ %><option value="<%= option.value %>" <%= String(value)===String(option.value)?'selected':'' %>><%= option.label %></option><% }) %>
+          </select>
         <% } else { %>
-          <input name="<%= field.name %>" type="<%= field.name==='email'?'email':'text' %>" maxlength="<%= field.maxLength %>" value="<%= record[field.name]||'' %>" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>>
+          <input name="<%= field.name %>" type="<%= field.type==='email'?'email':field.type==='number'?'number':'text' %>" <%= field.type==='number'?`step="0.001" min="${field.min}" max="${field.max}"`:'' %> <%= field.maxLength?`maxlength="${field.maxLength}"`:'' %> value="<%= value %>" <%= field.required?'required':'' %> aria-invalid="<%= Boolean(error) %>" <%= error?`aria-describedby="${field.name}-error"`:'' %>>
         <% } %>
         <% if(error){ %><span class="field-error" id="<%= field.name %>-error"><%= error %></span><% } %>
       </label>
@@ -20,3 +25,18 @@
     <div class="span-2 form-actions"><button class="primary">Save <%= config.label.toLowerCase() %></button><a class="secondary button" href="/master/<%= type %>">Cancel</a></div>
   </form>
 </section>
+<script>
+  const dependencyInputs = document.querySelectorAll('[data-dependent-field]');
+  dependencyInputs.forEach(field => {
+    const input = document.querySelector(`[name="${field.dataset.dependentField}"]`);
+    const dependentInput = field.querySelector('input,select,textarea');
+    const updateVisibility = () => {
+      const visible = input.value === field.dataset.dependentValue;
+      field.hidden = !visible;
+      if (dependentInput) dependentInput.required = visible;
+      if (!visible && dependentInput) dependentInput.value = '';
+    };
+    input.addEventListener('change', updateVisibility);
+    updateVisibility();
+  });
+</script>

@@ -1,13 +1,35 @@
 <div class="page-head">
-  <div><div class="eyebrow">INVENTORY</div><h1><%= item?'Edit inventory':'Add inventory' %></h1><p class="muted">Track laboratory chemicals by batch and container size, or add regular inventory.</p></div>
+  <div><div class="eyebrow">INVENTORY</div><h1><%= item?'Edit inventory':'Add inventory' %></h1><p class="muted">Enter stock and glassware or equipment details here. Chemicals are tracked by batch and container size.</p></div>
   <a class="secondary button" href="/inventory">Back</a>
 </div>
 <section class="card form-card">
   <form method="post" action="<%= action %>" class="grid-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label id="stock_name_field" <%= item?.chemical_form?'hidden':'' %>>Name *<input id="name" name="name" required maxlength="150" value="<%= item?.chemical_form?'':item?.name||'' %>" <%= item?.chemical_form?'disabled':'' %>></label>
+    <label id="stock_name_field" <%= item?.chemical_form?'hidden':'' %>>Name *<input id="name" name="name" required maxlength="150" value="<%= item?.chemical_form?'':item?.name||'' %>" <%= item?.chemical_form||item?.glassware_master_id||item?.equipment_master_id?'readonly':'' %>></label>
+    <% if(!item){ %>
+      <label>Glassware master
+        <select id="glassware_master_id" name="glassware_master_id">
+          <option value="">Not linked to glassware</option>
+          <% glassware.forEach(master=>{ %>
+            <option value="<%= master.id %>" data-name="<%= master.name %>"><%= master.name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>Equipment & instruments master
+        <select id="equipment_master_id" name="equipment_master_id">
+          <option value="">Not linked to equipment</option>
+          <% equipment.forEach(master=>{ %>
+            <option value="<%= master.id %>" data-name="<%= master.name %>"><%= master.name %></option>
+          <% }) %>
+        </select>
+      </label>
+    <% } else if(item.glassware_master_id){ %>
+      <label>Glassware master<input value="<%= item.glassware_master_name %>" readonly></label>
+    <% } else if(item.equipment_master_id){ %>
+      <label>Equipment & instruments master<input value="<%= item.equipment_master_name %>" readonly></label>
+    <% } %>
     <label>Item type
-      <select id="item_type" name="item_type">
+      <select id="item_type" name="item_type" <%= item?.glassware_master_id||item?.equipment_master_id?'disabled':'' %>>
         <option value="ASSET" <%= item?.item_type==='ASSET'||!item?'selected':'' %>>Asset</option>
         <option value="CONSUMABLE" <%= item?.item_type==='CONSUMABLE'?'selected':'' %>>Consumable</option>
       </select>
@@ -60,16 +82,47 @@
       </label>
       <p class="span-2 muted">Each stock line represents one batch and one container size. Add another line to track a different size from the same batch.</p>
     </div>
-    <label>Minimum stock alert threshold<input type="number" step="0.001" min="0" name="minimum_stock" value="<%= item?.minimum_stock??0 %>" required></label>
+    <div id="glassware_fields" class="span-2 grid-form" <%= item?.glassware_master_id?'':'hidden' %>>
+      <label>Glassware type *<input name="glassware_type" maxlength="100" data-master-required value="<%= item?.glassware_type||'' %>"></label>
+      <label>Capacity *<input type="number" step="0.001" min="0.001" max="999999999.999" name="capacity" data-master-required value="<%= item?.capacity||'' %>"></label>
+      <label>Capacity unit *
+        <select name="capacity_unit" data-master-required>
+          <% ['ml','L','µl'].forEach(x=>{ %><option value="<%= x %>" <%= (item?.capacity_unit||'ml')===x?'selected':'' %>><%= x %></option><% }) %>
+        </select>
+      </label>
+      <label>Material *<input name="material" maxlength="100" data-master-required value="<%= item?.material||'' %>"></label>
+      <label>Class *
+        <select name="glass_class" data-master-required>
+          <% [['CLASS_A','Class A'],['CLASS_B','Class B'],['NOT_APPLICABLE','Not Applicable']].forEach(([value,label])=>{ %><option value="<%= value %>" <%= (item?.glass_class||'NOT_APPLICABLE')===value?'selected':'' %>><%= label %></option><% }) %>
+        </select>
+      </label>
+      <label>Graduation *
+        <select name="graduation" data-master-required>
+          <% [['GRADUATED','Graduated'],['NON_GRADUATED','Non-graduated']].forEach(([value,label])=>{ %><option value="<%= value %>" <%= (item?.graduation||'NON_GRADUATED')===value?'selected':'' %>><%= label %></option><% }) %>
+        </select>
+      </label>
+    </div>
+    <div id="equipment_fields" class="span-2 grid-form" <%= item?.equipment_master_id?'':'hidden' %>>
+      <label>Equipment type *<input name="equipment_type" maxlength="100" data-master-required value="<%= item?.equipment_type||'' %>"></label>
+      <label>Model number<input name="model_number" maxlength="100" value="<%= item?.model_number||'' %>"></label>
+      <label class="span-2">Technical specifications<textarea name="technical_specifications" maxlength="4000" rows="3"><%= item?.technical_specifications||'' %></textarea></label>
+      <label>Calibration required *
+        <select id="calibration_required" name="calibration_required" data-master-required>
+          <option value="0" <%= String(item?.calibration_required??0)==='0'?'selected':'' %>>No</option>
+          <option value="1" <%= String(item?.calibration_required??0)==='1'?'selected':'' %>>Yes</option>
+        </select>
+      </label>
+      <label id="calibration_frequency_field" <%= String(item?.calibration_required||0)==='1'?'':'hidden' %>>Calibration frequency<input id="calibration_frequency" name="calibration_frequency" maxlength="100" value="<%= item?.calibration_frequency||'' %>" <%= String(item?.calibration_required||0)==='1'?'required':'' %>></label>
+      <label>Warranty applicable *
+        <select name="warranty_applicable" data-master-required>
+          <option value="0" <%= String(item?.warranty_applicable??0)==='0'?'selected':'' %>>No</option>
+          <option value="1" <%= String(item?.warranty_applicable??0)==='1'?'selected':'' %>>Yes</option>
+        </select>
+      </label>
+    </div>
+    <label>Minimum stock alert threshold<input id="minimum_stock" type="number" step="0.001" min="0" name="minimum_stock" value="<%= item?.minimum_stock??0 %>" required></label>
     <label>Qty received from vendor *<input id="quantity" type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
-    <label>Unit *
-      <select id="unit" name="unit" <%= item?'disabled':'' %>>
-        <% ['Piece','Bottle','Box','Pair','Pack','Kg','Gram','Liter','ml','Kit','Set'].forEach(x=>{ %>
-          <option <%= (item?.unit||'Piece')===x?'selected':'' %>><%= x %></option>
-        <% }) %>
-      </select>
-      <% if(item){ %><input type="hidden" name="unit" value="<%= item.unit %>"><% } %>
-    </label>
+    <label>Unit *<input id="unit" name="unit" maxlength="30" value="<%= item?.unit||'Piece' %>" required <%= item?'readonly':'' %>></label>
     <%- include('../partials/master-autocomplete', {
       label: 'Vendor name',
       fieldName: 'vendor_id',
@@ -125,6 +178,36 @@
   const chemicalId = document.getElementById('chemical_id');
   const stockNameField = document.getElementById('stock_name_field');
   const stockName = document.getElementById('name');
+  const glasswareMaster = document.getElementById('glassware_master_id');
+  const equipmentMaster = document.getElementById('equipment_master_id');
+  const glasswareFields = document.getElementById('glassware_fields');
+  const equipmentFields = document.getElementById('equipment_fields');
+  const fixedGlasswareMaster = <%= Boolean(item?.glassware_master_id) %>;
+  const fixedEquipmentMaster = <%= Boolean(item?.equipment_master_id) %>;
+  const isNewInventory = <%= item?'false':'true' %>;
+
+  function updateCalibrationFrequencyVisibility() {
+    const required = !equipmentFields.hidden && document.getElementById('calibration_required').value === '1';
+    const field = document.getElementById('calibration_frequency_field');
+    const input = document.getElementById('calibration_frequency');
+    field.hidden = !required;
+    input.required = required;
+    if (!required) input.value = '';
+  }
+
+  function updateInventoryMasterFields() {
+    const hasGlasswareMaster = isNewInventory ? Boolean(glasswareMaster?.value) : fixedGlasswareMaster;
+    const hasEquipmentMaster = isNewInventory ? Boolean(equipmentMaster?.value) : fixedEquipmentMaster;
+    glasswareFields.hidden = !hasGlasswareMaster;
+    equipmentFields.hidden = !hasEquipmentMaster;
+    glasswareFields.querySelectorAll('[data-master-required]').forEach(input => {
+      input.required = hasGlasswareMaster;
+    });
+    equipmentFields.querySelectorAll('[data-master-required]').forEach(input => {
+      input.required = hasEquipmentMaster;
+    });
+    updateCalibrationFrequencyVisibility();
+  }
 
   document.querySelectorAll('[data-master-combobox]').forEach(combobox => {
     const input = combobox.querySelector('[data-master-input]');
@@ -224,7 +307,28 @@
     if (option) option.click();
   };
 
-  function updateChemicalFields() {
+  function applyInventoryMasterChoice(select) {
+    if (!isNewInventory || !select) return;
+    const other = select === glasswareMaster ? equipmentMaster : glasswareMaster;
+    if (select.value) {
+      if (other) other.value = '';
+      chemicalForm.value = '';
+      updateChemicalFields(false);
+      const option = select.selectedOptions[0];
+      stockName.value = option.dataset.name;
+      stockName.readOnly = true;
+      itemType.value = 'ASSET';
+      itemType.disabled = true;
+    } else if (other && other.value) {
+      applyInventoryMasterChoice(other);
+    } else {
+      stockName.readOnly = false;
+      itemType.disabled = false;
+    }
+    updateInventoryMasterFields();
+  }
+
+  function updateChemicalFields(syncInventoryMaster = true) {
     const isChemical = Boolean(chemicalForm.value);
     chemicalFields.hidden = !isChemical;
     stockNameField.hidden = isChemical;
@@ -240,6 +344,12 @@
     document.getElementById('batch_number').required = isChemical;
     document.getElementById('expiry_date').required = isChemical;
     if (isChemical) {
+      if (isNewInventory) {
+        if (glasswareMaster) glasswareMaster.value = '';
+        if (equipmentMaster) equipmentMaster.value = '';
+        stockName.readOnly = false;
+        itemType.disabled = false;
+      }
       itemType.value = 'CONSUMABLE';
       if (unit.value === 'Piece') unit.value = 'Bottle';
       const validUnits = chemicalForm.value === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
@@ -247,6 +357,15 @@
         capacityUnit.value = chemicalForm.value === 'LIQUID' ? 'ml' : 'g';
       }
     }
+    if (!isChemical && isNewInventory && syncInventoryMaster) {
+      const selectedMaster = glasswareMaster?.value ? glasswareMaster : equipmentMaster;
+      if (selectedMaster?.value) applyInventoryMasterChoice(selectedMaster);
+      else {
+        stockName.readOnly = false;
+        itemType.disabled = false;
+      }
+    }
+    updateInventoryMasterFields();
     if (!quantity.readOnly) {
       quantity.step = isChemical ? '1' : '0.001';
       quantity.min = isChemical ? '1' : '0.001';
@@ -259,6 +378,9 @@
   }
 
   chemicalForm.addEventListener('change', updateChemicalFields);
+  if (glasswareMaster) glasswareMaster.addEventListener('change', () => applyInventoryMasterChoice(glasswareMaster));
+  if (equipmentMaster) equipmentMaster.addEventListener('change', () => applyInventoryMasterChoice(equipmentMaster));
+  document.getElementById('calibration_required').addEventListener('change', updateCalibrationFrequencyVisibility);
   const savedBatch = document.getElementById('saved_batch');
   if (savedBatch) {
     const chemicalName = document.querySelector('[name="name"]');
@@ -291,5 +413,6 @@
       updateChemicalFields();
     });
   }
+  updateInventoryMasterFields();
   updateChemicalFields();
 </script>

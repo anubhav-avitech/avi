@@ -1,0 +1,8 @@
+.master-search input[name="q"]{min-width:220px}
+.master-table-card{overflow-x:auto}
+.master-table{min-width:920px}
+.master-table .master-actions-heading{text-align:right}
+.pagination{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:16px;color:var(--muted);font-size:11px}
+.pagination a{color:var(--text)}
+.pagination strong{color:var(--text)}
+@media(max-width:900px){.master-search input[name="q"]{min-width:100%}.pagination{flex-wrap:wrap}}

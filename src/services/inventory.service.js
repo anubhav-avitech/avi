@@ -65,6 +65,97 @@ async function selectedMaster(conn, table, rawId, required, errorCode) {
   return rows[0];
 }
 
+async function selectedInventoryMaster(conn, table, rawId) {
+  const raw = String(rawId || '');
+  if (!raw) return null;
+  if (!/^[1-9]\d*$/.test(raw) || !Number.isSafeInteger(Number(raw))) {
+    throw new Error('INVALID_ITEM_MASTER');
+  }
+  const [rows] = await conn.query(
+    `SELECT id,name FROM ${table} WHERE id=?`,
+    [Number(raw)]
+  );
+  if (!rows.length) throw new Error('INVALID_ITEM_MASTER');
+  return rows[0];
+}
+
+function inventoryMasterDetails(data, type) {
+  const empty = {
+    glassware_type: null,
+    capacity: null,
+    capacity_unit: null,
+    material: null,
+    glass_class: null,
+    graduation: null,
+    equipment_type: null,
+    model_number: null,
+    technical_specifications: null,
+    calibration_required: null,
+    calibration_frequency: null,
+    warranty_applicable: null
+  };
+  if (!type) return empty;
+
+  if (type === 'glassware') {
+    const glasswareType = String(data.glassware_type || '').trim();
+    const rawCapacity = String(data.capacity || '').trim();
+    const capacityUnit = String(data.capacity_unit || '');
+    const material = String(data.material || '').trim();
+    const glassClass = String(data.glass_class || '');
+    const graduation = String(data.graduation || '');
+    if (
+      !glasswareType || glasswareType.length > 100 ||
+      !/^(?:\d+(?:\.\d{1,3})?|\.\d{1,3})$/.test(rawCapacity) ||
+      Number(rawCapacity) <= 0 || Number(rawCapacity) > MAX_QUANTITY ||
+      !['ml', 'L', 'µl'].includes(capacityUnit) ||
+      !material || material.length > 100 ||
+      !['CLASS_A', 'CLASS_B', 'NOT_APPLICABLE'].includes(glassClass) ||
+      !['GRADUATED', 'NON_GRADUATED'].includes(graduation)
+    ) {
+      throw new Error('INVALID_GLASSWARE_DETAILS');
+    }
+    return {
+      ...empty,
+      glassware_type: glasswareType,
+      capacity: Number(rawCapacity),
+      capacity_unit: capacityUnit,
+      material,
+      glass_class: glassClass,
+      graduation
+    };
+  }
+
+  if (type === 'equipment') {
+    const equipmentType = String(data.equipment_type || '').trim();
+    const modelNumber = String(data.model_number || '').trim();
+    const technicalSpecifications = String(data.technical_specifications || '').trim();
+    const calibrationRequired = String(data.calibration_required ?? '0');
+    const calibrationFrequency = String(data.calibration_frequency || '').trim();
+    const warrantyApplicable = String(data.warranty_applicable ?? '0');
+    if (
+      !equipmentType || equipmentType.length > 100 ||
+      modelNumber.length > 100 ||
+      technicalSpecifications.length > 4000 ||
+      !['0', '1'].includes(calibrationRequired) ||
+      !['0', '1'].includes(warrantyApplicable) ||
+      (calibrationRequired === '1' && (!calibrationFrequency || calibrationFrequency.length > 100))
+    ) {
+      throw new Error('INVALID_EQUIPMENT_DETAILS');
+    }
+    return {
+      ...empty,
+      equipment_type: equipmentType,
+      model_number: modelNumber || null,
+      technical_specifications: technicalSpecifications || null,
+      calibration_required: Number(calibrationRequired),
+      calibration_frequency: calibrationRequired === '1' ? calibrationFrequency : null,
+      warranty_applicable: Number(warrantyApplicable)
+    };
+  }
+
+  throw new Error('INVALID_ITEM_MASTER');
+}
+
 function normalizeStockQuantity(value, chemical) {
   const quantity = normalizeQuantity(value);
   if (chemical && !Number.isInteger(quantity)) throw new Error('INVALID_QUANTITY');
@@ -94,6 +185,7 @@ async function list(user, search) {
   let sql = `
     SELECT i.*,p.minimum_stock,
            c.name AS chemical_master_name,v.name AS vendor_master_name,
+           gm.name AS glassware_master_name,em.name AS equipment_master_name,
            (
              SELECT COALESCE(SUM(stock.quantity),0)
              FROM inventory_items stock
@@ -106,6 +198,8 @@ async function list(user, search) {
     JOIN inventory_products p ON p.id=i.product_id
     LEFT JOIN chemical_master c ON c.id=i.chemical_id
     LEFT JOIN vendor_master v ON v.id=i.vendor_id
+    LEFT JOIN glassware_master gm ON gm.id=i.glassware_master_id
+    LEFT JOIN equipment_instrument_master em ON em.id=i.equipment_master_id
     WHERE 1=1
   `;
   const params = [];
@@ -124,11 +218,14 @@ async function get(id) {
   const [rows] = await db.query(`
     SELECT i.*,p.name AS product_name,p.item_type AS product_item_type,p.unit AS product_unit,p.minimum_stock,
            c.id AS chemical_master_id,c.name AS chemical_master_name,v.id AS vendor_master_id,
-           v.name AS vendor_master_name
+           v.name AS vendor_master_name,gm.name AS glassware_master_name,
+           em.name AS equipment_master_name
     FROM inventory_items i
     JOIN inventory_products p ON p.id=i.product_id
     LEFT JOIN chemical_master c ON c.id=i.chemical_id
     LEFT JOIN vendor_master v ON v.id=i.vendor_id
+    LEFT JOIN glassware_master gm ON gm.id=i.glassware_master_id
+    LEFT JOIN equipment_instrument_master em ON em.id=i.equipment_master_id
     WHERE i.id=?
   `, [id]);
   return rows[0] || null;
@@ -205,14 +302,35 @@ async function create(data, user) {
     const chemicalMaster = form
       ? await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER')
       : null;
+    if (chemicalMaster && (data.glassware_master_id || data.equipment_master_id)) {
+      throw new Error('INVALID_ITEM_MASTER');
+    }
+    if (data.glassware_master_id && data.equipment_master_id) {
+      throw new Error('INVALID_ITEM_MASTER');
+    }
+    const glasswareMaster = await selectedInventoryMaster(conn, 'glassware_master', data.glassware_master_id);
+    const equipmentMaster = await selectedInventoryMaster(
+      conn,
+      'equipment_instrument_master',
+      data.equipment_master_id
+    );
+    const inventoryMaster = glasswareMaster || equipmentMaster;
     const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
     const chemical = chemicalDetails(data, chemicalMaster?.name);
+    if (chemical && inventoryMaster) throw new Error('INVALID_ITEM_MASTER');
     const quantity = normalizeStockQuantity(data.quantity, chemical);
-    const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
-    assetCode = `${chemical ? 'CHEM' : 'STK'}-${randomUUID().toUpperCase()}`;
-    const name = chemical ? chemicalMaster.name : String(data.name || '').trim();
+    const itemType = chemical || (!inventoryMaster && data.item_type === 'CONSUMABLE') ? 'CONSUMABLE' : 'ASSET';
+    const assetPrefix = chemical ? 'CHEM' : glasswareMaster ? 'GLS' : equipmentMaster ? 'EQP' : 'STK';
+    assetCode = `${assetPrefix}-${randomUUID().toUpperCase()}`;
+    const name = chemical
+      ? chemicalMaster.name
+      : inventoryMaster?.name || String(data.name || '').trim();
     if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
     const minimumStock = normalizeMinimumStock(data.minimum_stock);
+    const masterDetails = inventoryMasterDetails(
+      data,
+      glasswareMaster ? 'glassware' : equipmentMaster ? 'equipment' : null
+    );
     const receivedDate = String(data.received_date || '').trim();
     const vendorName = vendorMaster?.name || null;
     const vendorBillNo = String(data.vendor_bill_no || '').trim();
@@ -222,15 +340,19 @@ async function create(data, user) {
     const productId = await productIdFor(conn, name, itemType, stockUnit, minimumStock);
     const [result] = await conn.query(`
       INSERT INTO inventory_items(
-        product_id,chemical_id,vendor_id,asset_code,name,item_type,category,description,serial_number,
+        product_id,chemical_id,vendor_id,glassware_master_id,equipment_master_id,asset_code,name,item_type,category,description,serial_number,
         quantity,unit,status,location,batch_number,manufacturer,
         vendor_name,vendor_bill_no,make_grade,received_by,received_date,expiry_date,
+        glassware_type,capacity,capacity_unit,material,glass_class,graduation,
+        equipment_type,model_number,technical_specifications,calibration_required,calibration_frequency,warranty_applicable,
         chemical_form,container_capacity,container_unit
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       productId,
       chemicalMaster?.id || null,
       vendorMaster?.id || null,
+      glasswareMaster?.id || null,
+      equipmentMaster?.id || null,
       assetCode,
       name,
       itemType,
@@ -249,6 +371,18 @@ async function create(data, user) {
       receivedBy || null,
       receivedDate || null,
       chemical ? chemical.expiryDate : data.expiry_date || null,
+      masterDetails.glassware_type,
+      masterDetails.capacity,
+      masterDetails.capacity_unit,
+      masterDetails.material,
+      masterDetails.glass_class,
+      masterDetails.graduation,
+      masterDetails.equipment_type,
+      masterDetails.model_number,
+      masterDetails.technical_specifications,
+      masterDetails.calibration_required,
+      masterDetails.calibration_frequency,
+      masterDetails.warranty_applicable,
       chemical?.form || null,
       chemical?.capacity || null,
       chemical?.unit || null
@@ -256,8 +390,26 @@ async function create(data, user) {
     inventoryId = result.insertId;
     await conn.query(
       'INSERT INTO inventory_transactions(inventory_id,actor_id,action,quantity,unit,details) VALUES(?,?,?,?,?,?)',
-      [inventoryId, user.id, 'ADD', quantity, chemical ? chemical.packageUnit : data.unit || 'Piece', JSON.stringify({
+      [inventoryId, user.id, 'ADD', quantity, stockUnit, JSON.stringify({
       asset_code: assetCode,
+      glassware_master_id: glasswareMaster?.id || null,
+      equipment_master_id: equipmentMaster?.id || null,
+      glassware_details: glasswareMaster ? {
+        glassware_type: masterDetails.glassware_type,
+        capacity: masterDetails.capacity,
+        capacity_unit: masterDetails.capacity_unit,
+        material: masterDetails.material,
+        glass_class: masterDetails.glass_class,
+        graduation: masterDetails.graduation
+      } : null,
+      equipment_details: equipmentMaster ? {
+        equipment_type: masterDetails.equipment_type,
+        model_number: masterDetails.model_number,
+        technical_specifications: masterDetails.technical_specifications,
+        calibration_required: masterDetails.calibration_required,
+        calibration_frequency: masterDetails.calibration_frequency,
+        warranty_applicable: masterDetails.warranty_applicable
+      } : null,
       chemical_form: chemical?.form || null,
       batch_number: chemical?.batchNumber || data.batch_number || null,
       expiry_date: chemical?.expiryDate || data.expiry_date || null,
@@ -422,9 +574,12 @@ async function update(id, data, user) {
   try {
     await conn.beginTransaction();
     const [rows] = await conn.query(`
-      SELECT i.*,p.name AS product_name,p.item_type AS product_item_type,p.unit AS product_unit,p.minimum_stock
+      SELECT i.*,p.name AS product_name,p.item_type AS product_item_type,p.unit AS product_unit,p.minimum_stock,
+             gm.name AS glassware_master_name,em.name AS equipment_master_name
       FROM inventory_items i
       JOIN inventory_products p ON p.id=i.product_id
+      LEFT JOIN glassware_master gm ON gm.id=i.glassware_master_id
+      LEFT JOIN equipment_instrument_master em ON em.id=i.equipment_master_id
       WHERE i.id=? FOR UPDATE
     `, [id]);
     if (!rows.length) throw new Error('NOT_FOUND');
@@ -436,10 +591,21 @@ async function update(id, data, user) {
       : null;
     const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
     const chemical = chemicalDetails(data, chemicalMaster?.name);
-    const name = chemical ? chemicalMaster.name : String(data.name || '').trim();
+    const inventoryMaster = old.glassware_master_id
+      ? { name: old.glassware_master_name }
+      : old.equipment_master_id
+        ? { name: old.equipment_master_name }
+        : null;
+    const name = chemical
+      ? chemicalMaster.name
+      : inventoryMaster?.name || String(data.name || '').trim();
     if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
-    const itemType = chemical || data.item_type === 'CONSUMABLE' ? 'CONSUMABLE' : 'ASSET';
+    const itemType = chemical || (!inventoryMaster && data.item_type === 'CONSUMABLE') ? 'CONSUMABLE' : 'ASSET';
     const minimumStock = normalizeMinimumStock(data.minimum_stock);
+    const masterDetails = inventoryMasterDetails(
+      data,
+      old.glassware_master_id ? 'glassware' : old.equipment_master_id ? 'equipment' : null
+    );
     if (Boolean(chemical) !== Boolean(old.chemical_form)) throw new Error('CHEMICAL_TYPE_IMMUTABLE');
     const stockUnit = chemical ? chemical.packageUnit : data.unit || old.unit;
     if (stockUnit !== old.unit) throw new Error('ITEM_UNIT_IMMUTABLE');
@@ -481,15 +647,19 @@ async function update(id, data, user) {
 
     await conn.query(`
       UPDATE inventory_items SET
-        product_id=?,chemical_id=?,vendor_id=?,name=?,item_type=?,description=?,serial_number=?,
+        product_id=?,chemical_id=?,vendor_id=?,glassware_master_id=?,equipment_master_id=?,name=?,item_type=?,description=?,serial_number=?,
         unit=?,location=?,batch_number=?,manufacturer=?,
         vendor_name=?,vendor_bill_no=?,make_grade=?,received_by=?,received_date=?,expiry_date=?,
+        glassware_type=?,capacity=?,capacity_unit=?,material=?,glass_class=?,graduation=?,
+        equipment_type=?,model_number=?,technical_specifications=?,calibration_required=?,calibration_frequency=?,warranty_applicable=?,
         chemical_form=?,container_capacity=?,container_unit=?
       WHERE id=?
     `, [
       productId,
       chemicalMaster?.id || null,
       vendorMaster?.id || null,
+      old.glassware_master_id || null,
+      old.equipment_master_id || null,
       name,
       itemType,
       data.description || null,
@@ -504,6 +674,18 @@ async function update(id, data, user) {
       receivedBy || null,
       receivedDate || null,
       chemical ? chemical.expiryDate : data.expiry_date || null,
+      masterDetails.glassware_type,
+      masterDetails.capacity,
+      masterDetails.capacity_unit,
+      masterDetails.material,
+      masterDetails.glass_class,
+      masterDetails.graduation,
+      masterDetails.equipment_type,
+      masterDetails.model_number,
+      masterDetails.technical_specifications,
+      masterDetails.calibration_required,
+      masterDetails.calibration_frequency,
+      masterDetails.warranty_applicable,
       chemical?.form || null,
       chemical?.capacity || null,
       chemical?.unit || null,
@@ -679,7 +861,7 @@ async function assignmentMovement(assignmentId, rawQuantity, note, actor, action
       WHERE assignment_id=?
     `, [assignmentId]);
     const balance = Number(balanceRows[0].balance);
-    if (action === 'CONSUME' && (assignment.item_type === 'ASSET' || assignment.chemical_form)) {
+    if (action === 'CONSUME' && assignment.item_type === 'ASSET') {
       throw new Error('NOT_CONSUMABLE');
     }
     if (action === 'RETURN' && (assignment.item_type !== 'ASSET' || assignment.chemical_form)) {
@@ -821,6 +1003,7 @@ module.exports = {
   update,
   retire,
   assign,
+  consumeAssignment,
   returnAssignment,
   assignments,
   transactions,

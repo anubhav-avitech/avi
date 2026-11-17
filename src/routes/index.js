@@ -16,7 +16,7 @@ const { loginLimiter } = require('../middleware/security');
 const setFlash = (req, msg, type = 'success') => {
   req.session.flash = { msg, type };
 };
-const masterType = type => ['chemicals', 'vendors'].includes(type) ? type : null;
+const masterType = type => ['chemicals', 'vendors', 'glassware', 'equipment'].includes(type) ? type : null;
 const orderFormItems = data => {
   const list = value => Array.isArray(value) ? value : value === undefined ? [] : [value];
   const names = list(data.product_name);
@@ -215,12 +215,12 @@ router.get('/master/:type', requireAuth, requireAdmin, async (req, res, next) =>
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   try {
     const config = masters.configFor(type);
+    const pageData = await masters.listPage(type, req.query);
     res.render('masters/index', {
       title: `${config.label} master`,
       type,
       config,
-      rows: await masters.list(type, req.query.q),
-      query: req.query.q || ''
+      ...pageData
     });
   } catch (error) {
     next(error);
@@ -454,6 +454,8 @@ router.get('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE'),
       batches: await inventory.chemicalBatches(),
       chemicals: await masters.list('chemicals'),
       vendors: await masters.list('vendors'),
+      glassware: await masters.active('glassware'),
+      equipment: await masters.active('equipment'),
       action: '/inventory/new'
     });
   } catch (error) {
@@ -480,6 +482,18 @@ router.post('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE')
     }
     if (error.message === 'INVALID_CHEMICAL_MASTER') {
       setFlash(req, 'Select a registered chemical from the suggestions.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_ITEM_MASTER') {
+      setFlash(req, 'Select one registered glassware or equipment master record.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_GLASSWARE_DETAILS') {
+      setFlash(req, 'Enter the glassware type, capacity, unit, material, class and graduation.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_EQUIPMENT_DETAILS') {
+      setFlash(req, 'Enter a valid equipment type and calibration or warranty details.', 'error');
       return res.redirect('/inventory/new');
     }
     if (error.message === 'INVALID_VENDOR_MASTER') {
@@ -627,6 +641,14 @@ router.post('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPD
     }
     if (error.message === 'INVALID_VENDOR_MASTER') {
       setFlash(req, 'Select a registered vendor from the suggestions.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'INVALID_GLASSWARE_DETAILS') {
+      setFlash(req, 'Enter the glassware type, capacity, unit, material, class and graduation.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
+    if (error.message === 'INVALID_EQUIPMENT_DETAILS') {
+      setFlash(req, 'Enter a valid equipment type and calibration or warranty details.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
     if (error.message === 'CHEMICAL_TYPE_IMMUTABLE') {

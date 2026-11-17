@@ -19,6 +19,30 @@
               <span class="item-reference"><%= i.asset_code %></span>
               <% if(i.serial_number){ %><span>Serial: <%= i.serial_number %></span><% } %>
             </div>
+            <% if(i.glassware_master_id){ %>
+              <details class="purchase-details">
+                <summary>Glassware details</summary>
+                <dl>
+                  <div><dt>Type</dt><dd><%= i.glassware_type || '—' %></dd></div>
+                  <div><dt>Capacity</dt><dd><%= i.capacity||'—' %> <%= i.capacity_unit||'' %></dd></div>
+                  <div><dt>Material</dt><dd><%= i.material||'—' %></dd></div>
+                  <div><dt>Class</dt><dd><%= i.glass_class||'—' %></dd></div>
+                  <div><dt>Graduation</dt><dd><%= i.graduation||'—' %></dd></div>
+                </dl>
+              </details>
+            <% } else if(i.equipment_master_id){ %>
+              <details class="purchase-details">
+                <summary>Equipment details</summary>
+                <dl>
+                  <div><dt>Type</dt><dd><%= i.equipment_type||'—' %></dd></div>
+                  <div><dt>Manufacturer / brand</dt><dd><%= i.manufacturer||'—' %></dd></div>
+                  <div><dt>Model</dt><dd><%= i.model_number||'—' %></dd></div>
+                  <div><dt>Specifications</dt><dd><%= i.technical_specifications||'—' %></dd></div>
+                  <div><dt>Calibration</dt><dd><%= i.calibration_required?'Required':'Not required' %><%= i.calibration_frequency?` · ${i.calibration_frequency}`:'' %></dd></div>
+                  <div><dt>Warranty</dt><dd><%= i.warranty_applicable?'Applicable':'Not applicable' %></dd></div>
+                </dl>
+              </details>
+            <% } %>
             <% if(i.chemical_form){ %>
               <div class="chemical-summary">
                 <span><%= i.chemical_form.toLowerCase() %></span>
@@ -40,7 +64,7 @@
             <% if(Number(i.minimum_stock)>0&&Number(i.product_available_quantity)<=Number(i.minimum_stock)){ %><span class="tag low-stock-tag">LOW STOCK · product available <%= i.product_available_quantity %> <%= i.unit %></span><% } %>
             <% if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<0){ %><span class="tag">EXPIRED</span><% }else if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<=30){ %><span class="tag"><%= daysToExpiry===0?'EXPIRES TODAY':`EXPIRING IN ${daysToExpiry} DAYS` %></span><% } %>
           </td>
-          <td><span class="tag"><%= i.chemical_form?'CHEMICAL':i.item_type %></span></td>
+          <td><span class="tag"><%= i.chemical_form?'CHEMICAL':i.glassware_master_id?'GLASSWARE':i.equipment_master_id?'EQUIPMENT':i.item_type %></span></td>
           <td>
             <strong><%= i.quantity %> <%= i.unit %></strong>
             <small>Minimum: <%= i.minimum_stock %> <%= i.unit %></small>

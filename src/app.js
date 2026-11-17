@@ -14,22 +14,14 @@ const routes = require('./routes');
 
 const app = express();
 
-/*
-|--------------------------------------------------------------------------
-| View Engine
-|--------------------------------------------------------------------------
-*/
+//View Engine
 
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
 app.use(layouts);
 
-/*
-|--------------------------------------------------------------------------
-| Security & Performance
-|--------------------------------------------------------------------------
-*/
+//Security & Performance
 
 app.use(
   helmet({
@@ -39,11 +31,7 @@ app.use(
 
 app.use(compression());
 
-/*
-|--------------------------------------------------------------------------
-| Request Parsing
-|--------------------------------------------------------------------------
-*/
+//Request Parsing
 
 app.use(
   express.urlencoded({
@@ -52,11 +40,7 @@ app.use(
   })
 );
 
-/*
-|--------------------------------------------------------------------------
-| Static Files
-|--------------------------------------------------------------------------
-*/
+//Static Files
 
 app.use(
   express.static(path.join(__dirname, '..', 'public'), {
@@ -70,11 +54,7 @@ app.use(
   })
 );
 
-/*
-|--------------------------------------------------------------------------
-| Session
-|--------------------------------------------------------------------------
-*/
+//Session
 
 const store = new MySQLStore({}, db);
 
@@ -94,55 +74,30 @@ app.use(
   })
 );
 
-/*
-|--------------------------------------------------------------------------
-| CSRF Protection
-|--------------------------------------------------------------------------
-*/
+//CSRF Protection
 
 app.use(csrf());
 
-/*
-|--------------------------------------------------------------------------
-| Global EJS Variables
-|--------------------------------------------------------------------------
-|
-| These variables are available in every EJS template.
-|
-*/
+//Global EJS Variables
+//These variables are available in every EJS template.
 
 app.use((req, res, next) => {
   res.locals.appName =
     process.env.APP_NAME || 'Avitech Inventory';
-
   res.locals.title = 'Inventory';
-
   res.locals.csrfToken = req.csrfToken();
-
   res.locals.user = req.session.user || null;
-
   res.locals.path = req.path;
-
   res.locals.flash = req.session.flash || null;
-
   delete req.session.flash;
-
   next();
 });
 
-/*
-|--------------------------------------------------------------------------
-| Routes
-|--------------------------------------------------------------------------
-*/
+//Routes
 
 app.use('/', routes);
 
-/*
-|--------------------------------------------------------------------------
-| 404 Handler
-|--------------------------------------------------------------------------
-*/
+//404 Handler
 
 app.use((req, res) => {
   res.status(404).render('errors/404', {
@@ -150,11 +105,7 @@ app.use((req, res) => {
   });
 });
 
-/*
-|--------------------------------------------------------------------------
-| Error Handler
-|--------------------------------------------------------------------------
-*/
+//Error Handler
 
 app.use((err, req, res, next) => {
   if (err.code === 'EBADCSRFTOKEN') {
@@ -170,11 +121,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-/*
-|--------------------------------------------------------------------------
-| Start Server
-|--------------------------------------------------------------------------
-*/
+//Start Server
 
 const port = Number(process.env.PORT || 3000);
 

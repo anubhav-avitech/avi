@@ -3,17 +3,33 @@
   <a class="primary button" href="/master/<%= type %>/new">Add <%= config.label.toLowerCase() %></a>
 </div>
 <form class="toolbar master-search" method="get" action="/master/<%= type %>">
-  <input name="q" value="<%= query %>" placeholder="Search <%= config.label.toLowerCase() %> records…" aria-label="Search <%= config.label.toLowerCase() %> records">
+  <input name="q" value="<%= search %>" placeholder="<%= config.searchPlaceholder %>" aria-label="Search <%= config.label.toLowerCase() %> records">
+  <% (config.filters||[]).forEach(filter=>{ %>
+    <% if(filter.type==='select'){ %>
+      <select name="<%= filter.name %>" aria-label="Filter by <%= filter.label.toLowerCase() %>">
+        <option value="">All <%= filter.label.toLowerCase() %></option>
+        <% filter.options.forEach(option=>{ %><option value="<%= option.value %>" <%= filters[filter.name]===option.value?'selected':'' %>><%= option.label %></option><% }) %>
+      </select>
+    <% } else { %>
+      <input name="<%= filter.name %>" value="<%= filters[filter.name] %>" placeholder="<%= filter.label %>" aria-label="Filter by <%= filter.label.toLowerCase() %>">
+    <% } %>
+  <% }) %>
   <button class="secondary">Filter</button>
 </form>
 <section class="card master-table-card">
   <table class="master-table">
     <thead><tr><% config.fields.forEach(field=>{ %><th><%= field.label %></th><% }) %><th class="master-actions-heading">Actions</th></tr></thead>
     <tbody>
-      <% if(!rows.length){ %><tr><td colspan="<%= config.fields.length+1 %>" class="empty"><%= query?'No matching records.':`No ${config.label.toLowerCase()}s registered yet.` %></td></tr><% } %>
+      <% if(!rows.length){ %><tr><td colspan="<%= config.fields.length+1 %>" class="empty"><%= search||Object.values(filters).some(Boolean)?'No matching records.':`No ${config.label.toLowerCase()} records registered yet.` %></td></tr><% } %>
       <% rows.forEach(record=>{ %>
         <tr>
-          <% config.fields.forEach(field=>{ %><td><%= record[field.name] || '—' %></td><% }) %>
+          <% config.fields.forEach(field=>{ const rawValue=record[field.name]; const choice=field.options&&field.options.find(option=>String(option.value)===String(rawValue)); %>
+            <td>
+              <% if(field.name==='status'){ %><span class="status <%= String(rawValue).toLowerCase() %>"><%= choice?choice.label:rawValue %></span>
+              <% } else if(choice){ %><%= choice.label %>
+              <% } else { %><%= rawValue===null||rawValue===undefined||rawValue===''?'—':rawValue %><% } %>
+            </td>
+          <% }) %>
           <td class="actions">
             <a href="/master/<%= type %>/<%= record.id %>/edit">Edit</a>
             <form method="post" action="/master/<%= type %>/<%= record.id %>/delete" onsubmit="return confirm('Delete this <%= config.label.toLowerCase() %>? Records referenced by inventory cannot be deleted.');">
@@ -26,3 +42,10 @@
     </tbody>
   </table>
 </section>
+<% if(pages>1){ %>
+  <nav class="pagination" aria-label="Master record pages">
+    <% if(page>1){ %><a class="secondary button" href="?<%= queryString %><%= queryString?'&':'' %>page=<%= page-1 %>">Previous</a><% } %>
+    <span>Page <strong><%= page %></strong> of <strong><%= pages %></strong> · <%= total %> records</span>
+    <% if(page<pages){ %><a class="secondary button" href="?<%= queryString %><%= queryString?'&':'' %>page=<%= page+1 %>">Next</a><% } %>
+  </nav>
+<% } %>

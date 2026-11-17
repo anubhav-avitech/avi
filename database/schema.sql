@@ -11,6 +11,8 @@ DROP TABLE IF EXISTS purchase_orders;
 DROP TABLE IF EXISTS company_settings;
 DROP TABLE IF EXISTS employees;
 DROP TABLE IF EXISTS inventory_items;
+DROP TABLE IF EXISTS equipment_instrument_master;
+DROP TABLE IF EXISTS glassware_master;
 DROP TABLE IF EXISTS inventory_products;
 DROP TABLE IF EXISTS vendor_master;
 DROP TABLE IF EXISTS chemical_master;
@@ -74,8 +76,13 @@ CREATE TABLE inventory_products (
   item_type ENUM('ASSET','CONSUMABLE') NOT NULL,
   unit VARCHAR(30) NOT NULL,
   minimum_stock DECIMAL(12,3) NOT NULL DEFAULT 0,
+  item_code VARCHAR(45) NULL,
+  description VARCHAR(500) NULL,
+  status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_inventory_product_status(status),
+  UNIQUE KEY uq_inventory_product_item_code(item_code),
   UNIQUE KEY uq_inventory_product_name_type_unit(name,item_type,unit)
 ) ENGINE=InnoDB;
 
@@ -94,6 +101,39 @@ CREATE TABLE vendor_master (
   email VARCHAR(254) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB;
+
+CREATE TABLE glassware_master (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  product_id BIGINT UNSIGNED NULL UNIQUE,
+  glassware_type VARCHAR(100) NULL,
+  capacity DECIMAL(12,3) NULL,
+  capacity_unit ENUM('ml','L','µl') NULL,
+  material VARCHAR(100) NULL,
+  glass_class ENUM('CLASS_A','CLASS_B','NOT_APPLICABLE') NULL DEFAULT 'NOT_APPLICABLE',
+  graduation ENUM('GRADUATED','NON_GRADUATED') NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY(product_id) REFERENCES inventory_products(id) ON DELETE RESTRICT,
+  UNIQUE KEY uq_glassware_master_name(name)
+) ENGINE=InnoDB;
+
+CREATE TABLE equipment_instrument_master (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(150) NOT NULL,
+  product_id BIGINT UNSIGNED NULL UNIQUE,
+  equipment_type VARCHAR(100) NULL,
+  manufacturer_brand VARCHAR(150) NULL,
+  model_number VARCHAR(100) NULL,
+  technical_specifications TEXT NULL,
+  calibration_required TINYINT(1) NULL DEFAULT 0,
+  calibration_frequency VARCHAR(100) NULL,
+  warranty_applicable TINYINT(1) NULL DEFAULT 0,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  FOREIGN KEY(product_id) REFERENCES inventory_products(id) ON DELETE RESTRICT,
+  UNIQUE KEY uq_equipment_master_name(name)
 ) ENGINE=InnoDB;
 
 CREATE TABLE company_settings (
@@ -182,6 +222,8 @@ CREATE TABLE inventory_items (
   product_id BIGINT UNSIGNED NOT NULL,
   chemical_id BIGINT UNSIGNED NULL,
   vendor_id BIGINT UNSIGNED NULL,
+  glassware_master_id BIGINT UNSIGNED NULL,
+  equipment_master_id BIGINT UNSIGNED NULL,
   asset_code VARCHAR(80) NOT NULL UNIQUE,
   name VARCHAR(150) NOT NULL,
   item_type ENUM('ASSET','CONSUMABLE') NOT NULL DEFAULT 'ASSET',
@@ -200,6 +242,18 @@ CREATE TABLE inventory_items (
   received_by VARCHAR(150) NULL,
   received_date DATE NULL,
   expiry_date DATE NULL,
+  glassware_type VARCHAR(100) NULL,
+  capacity DECIMAL(12,3) NULL,
+  capacity_unit ENUM('ml','L','µl') NULL,
+  material VARCHAR(100) NULL,
+  glass_class ENUM('CLASS_A','CLASS_B','NOT_APPLICABLE') NULL,
+  graduation ENUM('GRADUATED','NON_GRADUATED') NULL,
+  equipment_type VARCHAR(100) NULL,
+  model_number VARCHAR(100) NULL,
+  technical_specifications TEXT NULL,
+  calibration_required TINYINT(1) NULL,
+  calibration_frequency VARCHAR(100) NULL,
+  warranty_applicable TINYINT(1) NULL,
   chemical_form ENUM('LIQUID','POWDER') NULL,
   container_capacity DECIMAL(12,3) NULL,
   container_unit ENUM('ml','L','g','kg') NULL,
@@ -208,12 +262,25 @@ CREATE TABLE inventory_items (
   FOREIGN KEY(product_id) REFERENCES inventory_products(id) ON DELETE RESTRICT,
   FOREIGN KEY(chemical_id) REFERENCES chemical_master(id) ON DELETE RESTRICT,
   FOREIGN KEY(vendor_id) REFERENCES vendor_master(id) ON DELETE RESTRICT,
+  FOREIGN KEY(glassware_master_id) REFERENCES glassware_master(id) ON DELETE RESTRICT,
+  FOREIGN KEY(equipment_master_id) REFERENCES equipment_instrument_master(id) ON DELETE RESTRICT,
   INDEX idx_inventory_product(product_id),
   INDEX idx_inventory_chemical(chemical_id),
   INDEX idx_inventory_vendor(vendor_id),
+  INDEX idx_inventory_glassware_master(glassware_master_id),
+  INDEX idx_inventory_equipment_master(equipment_master_id),
   INDEX idx_inventory_status(status),
   INDEX idx_inventory_type(item_type),
-  INDEX idx_inventory_expiry(expiry_date)
+  INDEX idx_inventory_expiry(expiry_date),
+  CONSTRAINT chk_inventory_glassware_capacity CHECK(capacity IS NULL OR capacity>0),
+  CONSTRAINT chk_inventory_equipment_flags CHECK(
+    (calibration_required IS NULL OR calibration_required IN (0,1))
+    AND (warranty_applicable IS NULL OR warranty_applicable IN (0,1))
+  ),
+  CONSTRAINT chk_inventory_single_master CHECK(
+    (glassware_master_id IS NULL OR equipment_master_id IS NULL)
+    AND (chemical_id IS NULL OR (glassware_master_id IS NULL AND equipment_master_id IS NULL))
+  )
 ) ENGINE=InnoDB;
 
 CREATE TABLE inventory_assignments (

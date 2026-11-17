@@ -147,6 +147,21 @@ This creates the administrator-managed chemical and vendor masters, backfills
 existing inventory references, and sets legacy vendor contact/address values
 to `Not provided` where those details were not previously stored.
 
+For an existing installation, add Glassware and Equipment & Instruments
+masters and their inventory relationships with the non-destructive migration:
+
+```bash
+mysql -u root -p < database/migrate-glassware-equipment-masters.sql
+```
+
+The migration can be rerun safely. Glassware and Equipment masters store names
+only, like Chemical Master. Enter units, stock thresholds, and glassware or
+equipment specifications when adding the inventory record. Existing master
+specifications are copied to linked inventory records, and duplicate master
+names are consolidated while preserving their inventory links. Quantities and
+transaction history are unchanged. Fresh databases receive these tables and
+inventory fields from `schema.sql`.
+
 For the administrator-only purchase order module, apply its additive migration
 after the chemical/vendor master migration:
 
