@@ -1,1 +1,77 @@
-<div class="page-head"><div><div class="eyebrow">INVENTORY TEAM</div><h1>Inventory Team</h1><p class="muted">Manage team members' application accounts and roles.</p></div><% if(user.permissions.includes('USERS_MANAGE')){ %><a class="primary button" href="/users/new">Add user</a><% } %></div><section class="card"><table><thead><tr><th>Team member</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody><% if(!rows.length){ %><tr><td colspan="4" class="empty">No team members found.</td></tr><% } %><% rows.forEach(u=>{ %><tr><td><strong><%= u.name %></strong><small><%= u.employee_code %> · <%= u.email %></small></td><td><span class="tag"><%= u.role_name %></span></td><td><span class="status <%= u.status.toLowerCase() %>"><%= u.status %></span></td><td class="actions"><% if(user.permissions.includes('USERS_MANAGE')){ %><a href="/users/<%= u.id %>/edit">Edit</a><% if(Number(u.id)!==Number(user.id)){ %><form method="post" action="/users/<%= u.id %>/delete" onsubmit="return confirm('Permanently delete this account? Its user links will be cleared from old history records, but the records themselves will be kept.');"><input type="hidden" name="_csrf" value="<%= csrfToken %>"><button class="link danger">Delete</button></form><% } %><% } %></td></tr><% }) %></tbody></table></section>
+<% if(flash && flash.toast){ %>
+<div class="team-toast" id="user_created_toast" role="status" aria-live="polite">
+  <svg class="team-toast-icon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"></circle><path d="m8 12 2.5 2.5L16 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"></path></svg>
+  <div class="team-toast-copy"><strong><%= flash.msg %></strong></div>
+  <button class="team-toast-close" type="button" aria-label="Dismiss notification" data-dismiss-toast>&times;</button>
+</div>
+<% } %>
+<div class="page-head"><div><div class="eyebrow">INVENTORY TEAM</div><h1>Inventory Team</h1><p class="muted">Manage team members' application accounts and roles.</p></div><% if(user.permissions.includes('USERS_MANAGE')){ %><a class="primary button" href="/users/new">Add user</a><% } %></div>
+<div class="team-table-container">
+<table class="team-table" aria-label="Inventory team members">
+<thead><tr><th scope="col">Team member</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col" aria-label="Actions"></th></tr></thead>
+<tbody>
+<% if(!rows.length){ %><tr><td colspan="4" class="team-table-empty">No team members found.</td></tr><% } %>
+<% rows.forEach(u=>{ %>
+<tr>
+  <td class="team-member-cell"><strong><%= u.name %></strong><small><%= u.employee_code %> · <%= u.email %></small></td>
+  <td><span class="tag"><%= u.role_name %></span></td>
+  <td><span class="status <%= u.status.toLowerCase() %>"><%= u.status %></span></td>
+  <td><div class="team-table-actions">
+    <% if(user.permissions.includes('USERS_MANAGE')){ %>
+    <a href="/users/<%= u.id %>/edit">Edit</a>
+    <% if(Number(u.id)!==Number(user.id)){ %>
+    <form method="post" action="/users/<%= u.id %>/delete" data-user-name="<%= u.name %>">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="link danger" type="button" data-user-delete aria-haspopup="dialog">Delete</button>
+    </form>
+    <% } %>
+    <% } %>
+  </div></td>
+</tr>
+<% }) %>
+</tbody></table>
+</div>
+<dialog class="user-delete-dialog" id="user_delete_dialog" aria-labelledby="user_delete_title" aria-describedby="user_delete_description">
+  <div class="eyebrow">INVENTORY TEAM</div>
+  <h2 id="user_delete_title">Delete team member?</h2>
+  <p id="user_delete_description">Are you sure you want to delete <strong id="user_delete_name"></strong>? This permanently removes their account. Their activity history will be kept, but unlinked from the account.</p>
+  <div class="user-delete-actions">
+    <button class="secondary" type="button" id="cancel_user_delete">Cancel</button>
+    <button class="primary user-delete-confirm" type="button" id="confirm_user_delete">Delete member</button>
+  </div>
+</dialog>
+<script>
+  const userDeleteDialog = document.getElementById('user_delete_dialog');
+  let pendingUserDeleteForm = null;
+
+  document.querySelectorAll('[data-user-delete]').forEach(button => {
+    button.addEventListener('click', () => {
+      pendingUserDeleteForm = button.closest('form');
+      document.getElementById('user_delete_name').textContent = pendingUserDeleteForm.dataset.userName;
+      userDeleteDialog.showModal();
+    });
+  });
+
+  document.getElementById('cancel_user_delete').addEventListener('click', () => userDeleteDialog.close());
+  userDeleteDialog.addEventListener('close', () => {
+    pendingUserDeleteForm = null;
+  });
+
+  document.getElementById('confirm_user_delete').addEventListener('click', () => {
+    if (!pendingUserDeleteForm) return;
+    const form = pendingUserDeleteForm;
+    pendingUserDeleteForm = null;
+    userDeleteDialog.close();
+    form.requestSubmit();
+  });
+
+  const userCreatedToast = document.getElementById('user_created_toast');
+  if (userCreatedToast) {
+    const dismissToast = () => {
+      userCreatedToast.classList.add('is-dismissed');
+      window.setTimeout(() => userCreatedToast.remove(), 180);
+    };
+    userCreatedToast.querySelector('[data-dismiss-toast]').addEventListener('click', dismissToast);
+    window.setTimeout(dismissToast, 5000);
+  }
+</script>

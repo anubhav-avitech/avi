@@ -867,6 +867,7 @@ router.post('/users/new', requireAuth, requireAdmin, requirePermission('USERS_MA
   try {
     await users.create(req.body, req.session.user);
     setFlash(req, 'User created.');
+    req.session.flash.toast = true;
     res.redirect('/users');
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {

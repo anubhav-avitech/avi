@@ -232,6 +232,12 @@ html[data-theme="night"] .retire-dialog {
   background: var(--panel);
 }
 
+html[data-theme="night"] .user-delete-confirm {
+  background: #ff9188;
+  border-color: #ff9188;
+  color: #2a1715;
+}
+
 html[data-theme="night"] .receiving-record-signatures > div {
   border-color: #697586;
 }
