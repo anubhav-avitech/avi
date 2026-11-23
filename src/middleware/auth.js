@@ -21,4 +21,22 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-module.exports = { requireAuth, requirePermission, requireAdmin };
+function requireMasterPermission(req, res, next) {
+  const permissions = {
+    chemicals: 'CHEMICAL_MASTER_ACCESS',
+    vendors: 'VENDOR_MASTER_ACCESS',
+    glassware: 'GLASSWARE_MASTER_ACCESS',
+    equipment: 'EQUIPMENT_MASTER_ACCESS'
+  };
+  const permission = permissions[req.params.type];
+  if (!permission) return next();
+  if (!req.session.user) {
+    return res.status(403).render('errors/403', { title: 'Access denied' });
+  }
+  if (!req.session.user.permissions.includes(permission)) {
+    return res.status(403).render('errors/403', { title: 'Access denied' });
+  }
+  next();
+}
+
+module.exports = { requireAuth, requirePermission, requireAdmin, requireMasterPermission };

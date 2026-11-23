@@ -6,17 +6,17 @@
 </div>
 <% } %>
 <div class="page-head"><div><div class="eyebrow">INVENTORY TEAM</div><h1>Inventory Team</h1><p class="muted">Manage team members' application accounts and roles.</p></div><% if(user.permissions.includes('USERS_MANAGE')){ %><a class="primary button" href="/users/new">Add user</a><% } %></div>
-<div class="team-table-container">
+<div class="team-page team-table-container">
 <table class="team-table" aria-label="Inventory team members">
 <thead><tr><th scope="col">Team member</th><th scope="col">Role</th><th scope="col">Status</th><th scope="col" aria-label="Actions"></th></tr></thead>
 <tbody>
 <% if(!rows.length){ %><tr><td colspan="4" class="team-table-empty">No team members found.</td></tr><% } %>
 <% rows.forEach(u=>{ %>
 <tr>
-  <td class="team-member-cell"><strong><%= u.name %></strong><small><%= u.employee_code %> · <%= u.email %></small></td>
-  <td><span class="tag"><%= u.role_name %></span></td>
-  <td><span class="status <%= u.status.toLowerCase() %>"><%= u.status %></span></td>
-  <td><div class="team-table-actions">
+  <td class="team-member-cell" data-label="Team member"><strong><%= u.name %></strong><small><%= u.employee_code %> · <%= u.email %></small></td>
+  <td data-label="Role"><span class="tag"><%= u.role_name %></span></td>
+  <td data-label="Status"><span class="status <%= u.status.toLowerCase() %>"><%= u.status %></span></td>
+  <td data-label="Actions"><div class="team-table-actions">
     <% if(user.permissions.includes('USERS_MANAGE')){ %>
     <a href="/users/<%= u.id %>/edit">Edit</a>
     <% if(Number(u.id)!==Number(user.id)){ %>

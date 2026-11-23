@@ -9,14 +9,14 @@ const employeeDirectory = require('../services/employee.service');
 const { dashboard } = require('../services/dashboard.service');
 const activity = require('../services/activity.service');
 const { audit } = require('../services/audit.service');
-const { requireAuth, requirePermission, requireAdmin } = require('../middleware/auth');
+const { requireAuth, requirePermission, requireAdmin, requireMasterPermission } = require('../middleware/auth');
 const { loginLimiter } = require('../middleware/security');
 
 const setFlash = (req, msg, type = 'success') => {
   req.session.flash = { msg, type };
 };
 const masterType = type => ['chemicals', 'vendors', 'glassware', 'equipment'].includes(type) ? type : null;
-router.get('/master/:type', requireAuth, requireAdmin, async (req, res, next) => {
+router.get('/master/:type', requireAuth, requireMasterPermission, async (req, res, next) => {
   const type = masterType(req.params.type);
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   try {
@@ -33,7 +33,7 @@ router.get('/master/:type', requireAuth, requireAdmin, async (req, res, next) =>
   }
 });
 
-router.get('/master/:type/new', requireAuth, requireAdmin, (req, res) => {
+router.get('/master/:type/new', requireAuth, requireMasterPermission, (req, res) => {
   const type = masterType(req.params.type);
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   const config = masters.configFor(type);
@@ -48,7 +48,7 @@ router.get('/master/:type/new', requireAuth, requireAdmin, (req, res) => {
   });
 });
 
-router.post('/master/:type/new', requireAuth, requireAdmin, async (req, res, next) => {
+router.post('/master/:type/new', requireAuth, requireMasterPermission, async (req, res, next) => {
   const type = masterType(req.params.type);
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   const config = masters.configFor(type);
@@ -74,7 +74,7 @@ router.post('/master/:type/new', requireAuth, requireAdmin, async (req, res, nex
   }
 });
 
-router.get('/master/:type/:id/edit', requireAuth, requireAdmin, async (req, res, next) => {
+router.get('/master/:type/:id/edit', requireAuth, requireMasterPermission, async (req, res, next) => {
   const type = masterType(req.params.type);
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   try {
@@ -95,7 +95,7 @@ router.get('/master/:type/:id/edit', requireAuth, requireAdmin, async (req, res,
   }
 });
 
-router.post('/master/:type/:id/edit', requireAuth, requireAdmin, async (req, res, next) => {
+router.post('/master/:type/:id/edit', requireAuth, requireMasterPermission, async (req, res, next) => {
   const type = masterType(req.params.type);
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   const config = masters.configFor(type);
@@ -123,7 +123,7 @@ router.post('/master/:type/:id/edit', requireAuth, requireAdmin, async (req, res
   }
 });
 
-router.post('/master/:type/:id/delete', requireAuth, requireAdmin, async (req, res, next) => {
+router.post('/master/:type/:id/delete', requireAuth, requireMasterPermission, async (req, res, next) => {
   const type = masterType(req.params.type);
   if (!type) return res.status(404).render('errors/404', { title: 'Not found' });
   const config = masters.configFor(type);
@@ -696,7 +696,19 @@ router.get('/users/:id/edit', requireAuth, requireAdmin, requirePermission('USER
       WHERE u.id=?
     `, [req.params.id]);
     if (!rows.length) return res.status(404).render('errors/404', { title: 'Not found' });
-    res.render('users/form', { title: 'Edit user', person: rows[0] });
+    const [permissions] = await db.query(`
+      SELECT p.code
+      FROM permissions p
+      JOIN user_permissions up ON up.permission_id=p.id
+      WHERE up.user_id=?
+    `, [req.params.id]);
+    res.render('users/form', {
+      title: 'Edit user',
+      person: {
+        ...rows[0],
+        permissions: permissions.map(row => row.code)
+      }
+    });
   } catch (error) {
     next(error);
   }

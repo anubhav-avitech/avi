@@ -12,6 +12,7 @@ DROP TABLE IF EXISTS glassware_master;
 DROP TABLE IF EXISTS inventory_products;
 DROP TABLE IF EXISTS vendor_master;
 DROP TABLE IF EXISTS chemical_master;
+DROP TABLE IF EXISTS user_permissions;
 DROP TABLE IF EXISTS role_permissions;
 DROP TABLE IF EXISTS permissions;
 DROP TABLE IF EXISTS users;
@@ -54,6 +55,14 @@ CREATE TABLE users (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY(role_id) REFERENCES roles(id) ON DELETE RESTRICT,
   INDEX idx_users_status(status)
+) ENGINE=InnoDB;
+
+CREATE TABLE user_permissions (
+  user_id BIGINT UNSIGNED NOT NULL,
+  permission_id BIGINT UNSIGNED NOT NULL,
+  PRIMARY KEY(user_id, permission_id),
+  FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE,
+  FOREIGN KEY(permission_id) REFERENCES permissions(id) ON DELETE CASCADE
 ) ENGINE=InnoDB;
 
 CREATE TABLE employees (
@@ -276,7 +285,11 @@ INSERT INTO permissions(code,name,description) VALUES
 ('USERS_VIEW','View users','Administrator-only user administration'),
 ('USERS_MANAGE','Manage users','Administrator-only user management'),
 ('ROLES_MANAGE','Manage roles','Administrator-only role/permission management'),
-('AUDIT_VIEW','View audit logs','Administrator-only system audit history');
+('AUDIT_VIEW','View audit logs','Administrator-only system audit history'),
+('CHEMICAL_MASTER_ACCESS','Access chemical master','Access chemical master pages'),
+('VENDOR_MASTER_ACCESS','Access vendor master','Access vendor master pages'),
+('GLASSWARE_MASTER_ACCESS','Access glassware master','Access glassware master pages'),
+('EQUIPMENT_MASTER_ACCESS','Access equipment master','Access equipment and instruments master pages');
 
 INSERT INTO role_permissions(role_id,permission_id)
 SELECT r.id,p.id FROM roles r CROSS JOIN permissions p

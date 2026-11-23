@@ -101,8 +101,18 @@
 .user-delete-dialog p{margin-bottom:20px;color:var(--muted)}
 .user-delete-actions{display:flex;justify-content:flex-end;gap:8px}
 .user-delete-confirm{background:#b42318;border-color:#b42318;color:#fff}
+.team-page{width:100%;min-width:0}
+.team-shell{
+  width:calc(100% - 72px);
+  max-width:none;
+  margin:0 0 0 72px;
+}
 .team-table-container{position:relative;width:100%;overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:var(--panel)}
-.team-table{width:100%;min-width:640px;border-collapse:collapse;border-spacing:0;font-size:13px}
+.team-table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;border-spacing:0;font-size:13px}
+.team-table th:nth-child(1){width:42%}
+.team-table th:nth-child(2){width:20%}
+.team-table th:nth-child(3){width:16%}
+.team-table th:nth-child(4){width:22%}
 .team-table thead tr{border-bottom:1px solid var(--line)}
 .team-table th{height:40px;padding:8px 16px;background:transparent;color:var(--muted);font-size:12px;font-weight:500;letter-spacing:normal;text-align:left;text-transform:none;vertical-align:middle;white-space:nowrap}
 .team-table td{height:56px;padding:10px 16px;border-bottom:1px solid var(--line);font-size:13px;vertical-align:middle}
@@ -110,10 +120,14 @@
 .team-table tbody tr:hover{background:var(--soft)}
 .team-table tbody tr:last-child td{border-bottom:0}
 .team-table .team-member-cell strong{font-weight:500}
-.team-table .team-member-cell small{font-size:12px}
+.team-table .team-member-cell small{font-size:12px;overflow-wrap:anywhere}
 .team-table .team-table-actions{display:flex;justify-content:flex-end;align-items:center;gap:12px;white-space:nowrap}
 .team-table .team-table-actions form{display:flex}
 .team-table .team-table-empty{height:96px;color:var(--muted);text-align:center}
+.team-form-card{width:100%;max-width:none}
+.team-form-card .grid-form{align-items:start}
+.team-form-card fieldset .master-permission-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 18px}
+.team-form-card fieldset .master-permission-grid label{margin:0}
 .expiry-alert-card{margin-bottom:18px;border-color:#f0d7a1}
 .expiry-alert-head{display:flex;align-items:center;justify-content:space-between;gap:14px;background:#fffbf1}
 .expiry-alert-head h2{margin:3px 0}
@@ -251,3 +265,30 @@ html[data-theme="night"] .expiry-badge.critical,html[data-theme="night"] .expiry
 @media(max-width:1000px){.overview-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}}
 @media(max-width:700px){.overview-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.overview-stat{padding:10px 11px}.overview-row{grid-template-columns:minmax(0,1fr) auto;gap:8px}.overview-pill{grid-column:2;grid-row:1 / span 2;justify-self:end}.overview-row-value{grid-column:2}.overview-expiry-row .overview-row-value{grid-column:1;grid-row:2;text-align:left}.overview-expiry-row .overview-pill{grid-column:2;grid-row:1 / span 2}.stock-maintenance-grid{grid-template-columns:1fr}}
 @media(max-width:420px){.overview-heading h1{font-size:22px}.overview-stat{align-items:flex-start;flex-direction:column;gap:5px}.overview-stat>strong{font-size:20px}}
+@media(max-width:700px){
+  .team-page{width:100%;max-width:none}
+  .team-shell{
+    width:100%;
+    max-width:none;
+    margin:0;
+  }
+  .team-table-container{overflow:visible;border:0;background:transparent}
+  .team-table{min-width:0}
+  .team-table thead{display:none}
+  .team-table tbody{display:grid;gap:10px}
+  .team-table tr{display:grid;grid-template-columns:1fr auto;gap:8px 12px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--panel)}
+  .team-table tbody tr:hover{background:var(--panel)}
+  .team-table td{display:block;height:auto;padding:0;border:0}
+  .team-table td::before{content:attr(data-label);display:block;margin-bottom:3px;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.06em}
+  .team-table .team-member-cell{grid-column:1/-1}
+  .team-table .team-member-cell small{overflow-wrap:anywhere}
+  .team-table td[data-label="Actions"]{grid-column:1/-1}
+  .team-table td[data-label="Actions"]::before{display:none}
+  .team-table .team-table-actions{justify-content:flex-start}
+  .team-form-card{max-width:none}
+  .team-form-card fieldset .master-permission-grid{grid-template-columns:1fr}
+  .team-toast{top:12px;right:12px;width:calc(100% - 24px)}
+  .user-delete-dialog{padding:18px}
+  .user-delete-actions{flex-direction:column-reverse}
+  .user-delete-actions>*{width:100%}
+}

@@ -47,23 +47,53 @@ async function update(id, data, actor) {
   `, [id]);
   if (!target) throw new Error('NOT_FOUND');
 
-  await db.query(`
-    UPDATE users
-    SET employee_code=?,name=?,email=?,role_id=?,status=?
-    WHERE id=?
-  `, [
-    String(data.employee_code || '').trim(),
-    String(data.name || '').trim(),
-    String(data.email || '').trim().toLowerCase(),
-    target.role_id,
-    data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
-    id
-  ]);
-
-  if (data.password) {
-    await db.query('UPDATE users SET password_hash=? WHERE id=?', [
-      await bcrypt.hash(data.password, 12), id
+  const conn = await db.getConnection();
+  try {
+    await conn.beginTransaction();
+    await conn.query(`
+      UPDATE users
+      SET employee_code=?,name=?,email=?,role_id=?,status=?
+      WHERE id=?
+    `, [
+      String(data.employee_code || '').trim(),
+      String(data.name || '').trim(),
+      String(data.email || '').trim().toLowerCase(),
+      target.role_id,
+      data.status === 'INACTIVE' ? 'INACTIVE' : 'ACTIVE',
+      id
     ]);
+
+    if (data.password) {
+      await conn.query('UPDATE users SET password_hash=? WHERE id=?', [
+        await bcrypt.hash(data.password, 12), id
+      ]);
+    }
+
+    await conn.query('DELETE FROM user_permissions WHERE user_id=?', [id]);
+    if (target.role_name !== 'Administrator') {
+      const selected = Array.isArray(data.master_permissions)
+        ? data.master_permissions
+        : data.master_permissions ? [data.master_permissions] : [];
+      const masterCodes = new Set([
+        'CHEMICAL_MASTER_ACCESS',
+        'VENDOR_MASTER_ACCESS',
+        'GLASSWARE_MASTER_ACCESS',
+        'EQUIPMENT_MASTER_ACCESS'
+      ]);
+      for (const code of selected) {
+        if (!masterCodes.has(code)) continue;
+        await conn.query(`
+          INSERT IGNORE INTO user_permissions(user_id,permission_id)
+          SELECT ?,p.id FROM permissions p WHERE p.code=?
+        `, [id, code]);
+      }
+    }
+    await conn.commit();
+  } catch (error) {
+    await conn.rollback();
+    throw error;
+  } finally {
+    conn.release();
   }
 
   await audit(actor.id, 'USER_UPDATED', 'users', id, {

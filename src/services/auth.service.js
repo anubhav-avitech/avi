@@ -27,10 +27,15 @@ async function login(email, password) {
   const [permissions] = await db.query(`
     SELECT p.code
     FROM permissions p
-    JOIN role_permissions rp ON rp.permission_id = p.id
-    WHERE rp.role_id = ?
+    JOIN (
+      SELECT permission_id FROM role_permissions WHERE role_id = ?
+      UNION
+      SELECT up.permission_id
+      FROM user_permissions up
+      WHERE up.user_id = ?
+    ) granted ON granted.permission_id = p.id
     ORDER BY p.code
-  `, [rows[0].role_id]);
+  `, [rows[0].role_id, rows[0].id]);
 
   return {
     ...rows[0],

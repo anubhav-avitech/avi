@@ -1,8 +1,8 @@
-<div class="page-head">
+<div class="page-head master-page master-page-head">
   <div><div class="eyebrow">MASTER DATA</div><h1><%= title %></h1><p class="muted"><%= config.nameOnly?`Enter only the ${config.label.toLowerCase()} name here.`:`Enter the ${config.label.toLowerCase()} details below.` %></p></div>
   <a class="secondary button" href="/master/<%= type %>">Back</a>
 </div>
-<section class="card form-card master-form-card">
+<section class="card form-card master-form-card master-page">
   <% if(typeof formError!=='undefined'&&formError){ %><p class="flash error" role="alert"><%= formError %></p><% } %>
   <form method="post" action="<%= action %>" class="grid-form">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">

@@ -162,5 +162,16 @@ names are consolidated while preserving their inventory links. Quantities and
 transaction history are unchanged. Fresh databases receive these tables and
 inventory fields from `schema.sql`.
 
+For existing installations, add per-user master page access:
+
+```bash
+mysql -u root -p < database/migrate-user-master-permissions.sql
+```
+
+This creates the `user_permissions` table and adds the Chemical, Vendor,
+Glassware, and Equipment master permissions. Administrators receive all four
+permissions. Inventory users receive only the permissions enabled on their
+edit page in Inventory Team.
+
 Do not run `database/schema.sql` on an existing database whose data must be
 preserved; it drops and recreates the application tables.

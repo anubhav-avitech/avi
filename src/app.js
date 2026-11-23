@@ -10,7 +10,7 @@ const path = require('path');
 const layouts = require('express-ejs-layouts');
 
 const db = require('./config/db');
-const routes = require('./routes');
+const routes = require('./routes/index');
 
 const app = express();
 
