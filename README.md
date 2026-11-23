@@ -126,8 +126,14 @@ This migration preserves existing inventory, users, employees, assignments, and
 transactions; creates product records from the existing inventory names, types,
 and units; links past assignment/return transactions to their assignments; adds
 consumption and stock movement ledger actions; and removes department columns
-and department scoping. Newly added product minimum-stock thresholds default to
-zero and can be configured from each product's inventory edit form.
+and department scoping. Product minimum-stock thresholds default to 15.
+
+For an existing installation, set the minimum-stock threshold of all products
+to 15 and make it the database default:
+
+```bash
+mysql -u root -p < database/migrate-minimum-stock-default.sql
+```
 
 For an existing installation, add the Activity & History filtering indexes
 without changing existing records:

@@ -80,7 +80,7 @@ CREATE TABLE inventory_products (
   name VARCHAR(150) NOT NULL,
   item_type ENUM('ASSET','CONSUMABLE') NOT NULL,
   unit VARCHAR(30) NOT NULL,
-  minimum_stock DECIMAL(12,3) NOT NULL DEFAULT 0,
+  minimum_stock DECIMAL(12,3) NOT NULL DEFAULT 15,
   item_code VARCHAR(45) NULL,
   description VARCHAR(500) NULL,
   status ENUM('ACTIVE','INACTIVE') NOT NULL DEFAULT 'ACTIVE',

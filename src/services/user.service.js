@@ -14,6 +14,18 @@ async function list(actor) {
   return rows;
 }
 
+async function inventoryTeamMembers(includeAdministrators = false) {
+  const [rows] = await db.query(`
+    SELECT u.name,u.employee_code
+    FROM users u
+    JOIN roles r ON r.id=u.role_id
+    WHERE (r.name='Inventory User' OR (r.name='Administrator' AND ?=1))
+      AND u.status='ACTIVE'
+    ORDER BY u.name,u.employee_code
+  `, [includeAdministrators ? 1 : 0]);
+  return rows;
+}
+
 async function create(data, actor) {
   const [[role]] = await db.query(
     "SELECT id,name FROM roles WHERE status='ACTIVE' AND name='Inventory User' LIMIT 1"
@@ -156,4 +168,4 @@ async function remove(id, actor) {
   }
 }
 
-module.exports = { list, create, update, remove };
+module.exports = { list, inventoryTeamMembers, create, update, remove };

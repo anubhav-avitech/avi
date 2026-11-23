@@ -257,11 +257,11 @@ router.get('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE'),
     res.render('inventory/form', {
       title: 'Add inventory',
       item: null,
-      batches: await inventory.chemicalBatches(),
       chemicals: await masters.list('chemicals'),
       vendors: await masters.list('vendors'),
       glassware: await masters.active('glassware'),
       equipment: await masters.active('equipment'),
+      teamMembers: await users.inventoryTeamMembers(req.session.user.role_name === 'Administrator'),
       action: '/inventory/new'
     });
   } catch (error) {
@@ -306,8 +306,12 @@ router.post('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE')
       setFlash(req, 'Select a registered vendor from the suggestions.', 'error');
       return res.redirect('/inventory/new');
     }
-    if (error.message === 'INVALID_MINIMUM_STOCK' || error.message === 'INVALID_ITEM_NAME') {
-      setFlash(req, 'Enter a valid product name and non-negative minimum stock threshold.', 'error');
+    if (error.message === 'INVALID_RECEIVED_BY') {
+      setFlash(req, 'Choose an active team member from Received by.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'INVALID_ITEM_NAME') {
+      setFlash(req, 'Enter a valid product name.', 'error');
       return res.redirect('/inventory/new');
     }
     if (error.message === 'INVALID_CHEMICAL') {
@@ -416,9 +420,9 @@ router.get('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPDA
     res.render('inventory/form', {
       title: 'Edit inventory',
       item,
-      batches: [],
       chemicals: await masters.list('chemicals'),
       vendors: await masters.list('vendors'),
+      teamMembers: await users.inventoryTeamMembers(req.session.user.role_name === 'Administrator'),
       action: `/inventory/${item.id}/edit`
     });
   } catch (error) {
@@ -449,6 +453,10 @@ router.post('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPD
       setFlash(req, 'Select a registered vendor from the suggestions.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
+    if (error.message === 'INVALID_RECEIVED_BY') {
+      setFlash(req, 'Choose an active team member from Received by.', 'error');
+      return res.redirect(`/inventory/${req.params.id}/edit`);
+    }
     if (error.message === 'INVALID_GLASSWARE_DETAILS') {
       setFlash(req, 'Enter the glassware type, capacity, unit, material, class and graduation.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
@@ -473,8 +481,8 @@ router.post('/inventory/:id/edit', requireAuth, requirePermission('INVENTORY_UPD
       setFlash(req, 'Chemical name, batch, expiry and container details cannot be changed after stock has been issued. Add a new stock line for a different batch or size.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
-    if (error.message === 'INVALID_MINIMUM_STOCK' || error.message === 'INVALID_ITEM_NAME') {
-      setFlash(req, 'Enter a valid product name and non-negative minimum stock threshold.', 'error');
+    if (error.message === 'INVALID_ITEM_NAME') {
+      setFlash(req, 'Enter a valid product name.', 'error');
       return res.redirect(`/inventory/${req.params.id}/edit`);
     }
     if (error.code === 'ER_DUP_ENTRY') {

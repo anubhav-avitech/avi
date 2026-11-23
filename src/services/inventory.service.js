@@ -2,6 +2,7 @@ const db = require('../config/db');
 const { audit } = require('./audit.service');
 const { randomUUID } = require('crypto');
 const MAX_QUANTITY = 999999999.999;
+const DEFAULT_MINIMUM_STOCK = 15;
 
 function normalizeQuantity(value) {
   const quantity = Number(value);
@@ -162,21 +163,28 @@ function normalizeStockQuantity(value, chemical) {
   return quantity;
 }
 
-function normalizeMinimumStock(value) {
-  const raw = String(value ?? '0').trim();
-  if (!/^(?:\d+(?:\.\d{1,3})?|\.\d{1,3})$/.test(raw)) throw new Error('INVALID_MINIMUM_STOCK');
-  const quantity = Number(raw);
-  if (!Number.isFinite(quantity) || quantity < 0 || quantity > 999999999.999) {
-    throw new Error('INVALID_MINIMUM_STOCK');
-  }
-  return quantity;
+async function validateReceivedBy(conn, value, user, existingValue = '') {
+  const name = String(value || '').trim();
+  if (!name) return null;
+  if (name === String(existingValue || '').trim()) return name;
+
+  const [rows] = await conn.query(`
+    SELECT u.name
+    FROM users u
+    JOIN roles r ON r.id=u.role_id
+    WHERE u.name=? AND u.status='ACTIVE'
+      AND (r.name='Inventory User' OR (r.name='Administrator' AND ?=1))
+    LIMIT 1
+  `, [name, user.role_name === 'Administrator' ? 1 : 0]);
+  if (!rows.length) throw new Error('INVALID_RECEIVED_BY');
+  return rows[0].name;
 }
 
 async function productIdFor(conn, name, itemType, unit, minimumStock) {
   const [result] = await conn.query(`
     INSERT INTO inventory_products(name,item_type,unit,minimum_stock)
     VALUES(?,?,?,?)
-    ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)
+    ON DUPLICATE KEY UPDATE minimum_stock=VALUES(minimum_stock),id=LAST_INSERT_ID(id)
   `, [name, itemType, unit, minimumStock]);
   return result.insertId;
 }
@@ -281,17 +289,6 @@ async function batchReceivingRecord(batchNumber) {
   };
 }
 
-async function chemicalBatches() {
-  const [rows] = await db.query(`
-    SELECT DISTINCT i.chemical_id,c.name, i.chemical_form,i.batch_number,i.manufacturer,i.expiry_date
-    FROM inventory_items i
-    JOIN chemical_master c ON c.id=i.chemical_id
-    WHERE i.chemical_form IS NOT NULL AND i.batch_number IS NOT NULL
-    ORDER BY c.name,i.batch_number
-  `);
-  return rows;
-}
-
 async function create(data, user) {
   const conn = await db.getConnection();
   let inventoryId;
@@ -326,7 +323,7 @@ async function create(data, user) {
       ? chemicalMaster.name
       : inventoryMaster?.name || String(data.name || '').trim();
     if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
-    const minimumStock = normalizeMinimumStock(data.minimum_stock);
+    const minimumStock = DEFAULT_MINIMUM_STOCK;
     const masterDetails = inventoryMasterDetails(
       data,
       glasswareMaster ? 'glassware' : equipmentMaster ? 'equipment' : null
@@ -335,7 +332,7 @@ async function create(data, user) {
     const vendorName = vendorMaster?.name || null;
     const vendorBillNo = String(data.vendor_bill_no || '').trim();
     const makeGrade = String(data.make_grade || '').trim();
-    const receivedBy = String(data.received_by || '').trim();
+    const receivedBy = await validateReceivedBy(conn, data.received_by, user);
     const stockUnit = chemical ? chemical.packageUnit : data.unit || 'Piece';
     const productId = await productIdFor(conn, name, itemType, stockUnit, minimumStock);
     const [result] = await conn.query(`
@@ -601,7 +598,7 @@ async function update(id, data, user) {
       : inventoryMaster?.name || String(data.name || '').trim();
     if (!name || name.length > 150) throw new Error('INVALID_ITEM_NAME');
     const itemType = chemical || (!inventoryMaster && data.item_type === 'CONSUMABLE') ? 'CONSUMABLE' : 'ASSET';
-    const minimumStock = normalizeMinimumStock(data.minimum_stock);
+    const minimumStock = old.minimum_stock;
     const masterDetails = inventoryMasterDetails(
       data,
       old.glassware_master_id ? 'glassware' : old.equipment_master_id ? 'equipment' : null
@@ -636,14 +633,11 @@ async function update(id, data, user) {
     }
 
     const productId = await productIdFor(conn, name, itemType, stockUnit, minimumStock);
-    if (Number(productId) === Number(old.product_id)) {
-      await conn.query('UPDATE inventory_products SET minimum_stock=? WHERE id=?', [minimumStock, productId]);
-    }
     const receivedDate = String(data.received_date || '').trim();
     const vendorName = vendorMaster?.name || null;
     const vendorBillNo = String(data.vendor_bill_no || '').trim();
     const makeGrade = String(data.make_grade || '').trim();
-    const receivedBy = String(data.received_by || '').trim();
+    const receivedBy = await validateReceivedBy(conn, data.received_by, user, old.received_by);
 
     await conn.query(`
       UPDATE inventory_items SET
@@ -663,9 +657,9 @@ async function update(id, data, user) {
       name,
       itemType,
       data.description || null,
-      data.serial_number || null,
+      data.serial_number || old.serial_number || null,
       stockUnit,
-      data.location || null,
+      data.location || old.location || null,
       chemical ? chemical.batchNumber : data.batch_number || null,
       data.manufacturer || null,
       vendorName || null,
@@ -995,7 +989,6 @@ module.exports = {
   get,
   batchReceivingRecords,
   batchReceivingRecord,
-  chemicalBatches,
   create,
   restock,
   adjustStock,

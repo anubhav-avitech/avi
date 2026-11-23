@@ -35,7 +35,7 @@
                 <summary>Equipment details</summary>
                 <dl>
                   <div><dt>Type</dt><dd><%= i.equipment_type||'—' %></dd></div>
-                  <div><dt>Manufacturer / brand</dt><dd><%= i.manufacturer||'—' %></dd></div>
+                  <div><dt>Mfg. date</dt><dd><%= i.manufacturer||'—' %></dd></div>
                   <div><dt>Model</dt><dd><%= i.model_number||'—' %></dd></div>
                   <div><dt>Specifications</dt><dd><%= i.technical_specifications||'—' %></dd></div>
                   <div><dt>Calibration</dt><dd><%= i.calibration_required?'Required':'Not required' %><%= i.calibration_frequency?` · ${i.calibration_frequency}`:'' %></dd></div>
@@ -55,7 +55,7 @@
                   <div><dt>Vendor</dt><dd><%= i.vendor_name || '—' %></dd></div>
                   <div><dt>Bill no.</dt><dd><%= i.vendor_bill_no || '—' %></dd></div>
                   <div><dt>Make / grade</dt><dd><%= i.make_grade || '—' %></dd></div>
-                  <div><dt>Manufacturer</dt><dd><%= i.manufacturer || '—' %></dd></div>
+                  <div><dt>Mfg. date</dt><dd><%= i.manufacturer || '—' %></dd></div>
                   <div><dt>Received</dt><dd><%= i.received_date || '—' %></dd></div>
                   <div><dt>Received by</dt><dd><%= i.received_by || '—' %></dd></div>
                 </dl>

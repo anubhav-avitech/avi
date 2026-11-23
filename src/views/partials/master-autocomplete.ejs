@@ -1,5 +1,5 @@
-<label class="master-autocomplete-label">
-  <%= label %><%= required?' *':'' %>
+<div class="master-autocomplete-field" <%= disabledUntilChemicalType?'data-chemical-type-required':'' %> <%= initiallyHidden?'hidden':'' %>>
+  <label class="master-autocomplete-label" for="<%= inputId %>"><%= label %><%= required?' *':'' %></label>
   <div class="master-autocomplete" data-master-combobox>
     <input type="text" id="<%= inputId %>" role="combobox" aria-autocomplete="list" aria-haspopup="listbox"
       aria-expanded="false" aria-controls="<%= listId %>" autocomplete="off" placeholder="Search or select…"
@@ -13,4 +13,4 @@
       <div class="master-autocomplete-empty" hidden>No matching records.</div>
     </div>
   </div>
-</label>
+</div>

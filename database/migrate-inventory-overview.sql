@@ -12,14 +12,14 @@ CREATE TABLE inventory_products (
   name VARCHAR(150) NOT NULL,
   item_type ENUM('ASSET','CONSUMABLE') NOT NULL,
   unit VARCHAR(30) NOT NULL,
-  minimum_stock DECIMAL(12,3) NOT NULL DEFAULT 0,
+  minimum_stock DECIMAL(12,3) NOT NULL DEFAULT 15,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uq_inventory_product_name_type_unit(name,item_type,unit)
 ) ENGINE=InnoDB;
 
 INSERT INTO inventory_products(name,item_type,unit,minimum_stock)
-SELECT name,item_type,unit,0
+SELECT name,item_type,unit,15
 FROM inventory_items
 GROUP BY name,item_type,unit;
 
