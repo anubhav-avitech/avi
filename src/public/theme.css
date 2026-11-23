@@ -111,18 +111,6 @@ html[data-theme="night"] .secondary {
   border-color: rgba(160, 172, 196, .35);
 }
 
-html[data-theme="night"] .po-detail-block,
-html[data-theme="night"] .po-payment-summary,
-html[data-theme="night"] .po-payment-value {
-  background: rgba(22, 29, 38, .92);
-  border-color: rgba(146, 161, 188, .35);
-  box-shadow: inset 0 1px 0 rgba(255,255,255,.03);
-}
-
-html[data-theme="night"] .po-detail-grid .po-detail-block:first-child {
-  background: linear-gradient(180deg, rgba(97, 112, 149, .22), rgba(22, 29, 38, .94));
-  border-color: rgba(140, 165, 229, .5);
-}
 
 html[data-theme="night"] th {
   background: #202833;

@@ -79,41 +79,6 @@ const ACTIVITY_SQL = `
   LEFT JOIN employees employee ON a.entity_type='employees' AND employee.id=CAST(a.entity_id AS UNSIGNED)
   LEFT JOIN inventory_items audit_inventory
     ON a.entity_type='inventory_items' AND audit_inventory.id=CAST(a.entity_id AS UNSIGNED)
-
-  UNION ALL
-
-  SELECT
-    'purchase-order' AS source,
-    h.id,
-    h.created_at,
-    'Administrative' AS category,
-    CONCAT('PURCHASE_ORDER_', h.action) AS action,
-    CASE h.action
-      WHEN 'CREATED' THEN 'Purchase order created'
-      WHEN 'UPDATED' THEN 'Purchase order updated'
-      WHEN 'DELETED' THEN 'Purchase order deleted'
-      ELSE 'Purchase order activity'
-    END AS activity,
-    COALESCE(JSON_UNQUOTE(JSON_EXTRACT(h.snapshot,'$.vendor_name')), 'Purchase order') AS record_name,
-    h.po_number AS record_identifier,
-    NULL AS quantity,
-    NULL AS unit,
-    NULL AS affected_user,
-    COALESCE(actor.name, 'Deleted user') AS actor_name,
-    CASE WHEN h.action='UPDATED' THEN JSON_OBJECT(
-      'before', (
-        SELECT previous.snapshot
-        FROM purchase_order_history previous
-        WHERE previous.po_number=h.po_number
-          AND (previous.created_at<h.created_at OR (previous.created_at=h.created_at AND previous.id<h.id))
-        ORDER BY previous.created_at DESC, previous.id DESC
-        LIMIT 1
-      ),
-      'after', h.snapshot
-    ) ELSE h.snapshot END AS details,
-    CONCAT_WS(' ', h.po_number, JSON_UNQUOTE(JSON_EXTRACT(h.snapshot,'$.vendor_name')), CAST(h.snapshot AS CHAR)) AS search_text
-  FROM purchase_order_history h
-  LEFT JOIN users actor ON actor.id=h.actor_id
 `;
 
 const ALLOWED_CATEGORIES = new Set(['Inventory', 'Administrative', 'System']);

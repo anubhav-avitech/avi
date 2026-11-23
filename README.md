@@ -162,17 +162,5 @@ names are consolidated while preserving their inventory links. Quantities and
 transaction history are unchanged. Fresh databases receive these tables and
 inventory fields from `schema.sql`.
 
-For the administrator-only purchase order module, apply its additive migration
-after the chemical/vendor master migration:
-
-```bash
-mysql -u root -p < database/migrate-product-orders.sql
-```
-
-Configure printable company details and logo path in **Master → Purchase
-orders → Company details**. Vendor and company details are snapshotted when
-each purchase order is created so reprints remain consistent. The jurisdiction
-footer is configurable there as well.
-
 Do not run `database/schema.sql` on an existing database whose data must be
 preserved; it drops and recreates the application tables.
