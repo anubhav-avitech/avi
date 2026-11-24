@@ -8,8 +8,8 @@
     <% if(!item){ %>
       <div class="span-2 inventory-category-tabs" role="group" aria-label="Inventory category">
         <button type="button" class="active" aria-pressed="true" data-inventory-category="chemical">Chemical</button>
-        <button type="button" aria-pressed="false" data-inventory-category="glassware">Glassware master</button>
-        <button type="button" aria-pressed="false" data-inventory-category="equipment">Equipment &amp; instruments master</button>
+        <button type="button" aria-pressed="false" data-inventory-category="glassware">Glassware</button>
+        <button type="button" aria-pressed="false" data-inventory-category="equipment">Equipment &amp; instruments</button>
       </div>
       <input type="hidden" id="name" name="name">
       <input type="hidden" id="item_type" name="item_type" value="ASSET">
@@ -17,26 +17,38 @@
       <label id="stock_name_field" <%= item.chemical_form?'hidden':'' %>>Name *<input id="name" name="name" required maxlength="150" value="<%= item.chemical_form?'':item.name||'' %>" <%= item.chemical_form||item.glassware_master_id||item.equipment_master_id?'readonly':'' %>></label>
     <% } %>
     <% if(!item){ %>
-      <label data-category-section="glassware" hidden>Glassware master
-        <select id="glassware_master_id" name="glassware_master_id">
-          <option value="">Not linked to glassware</option>
-          <% glassware.forEach(master=>{ %>
-            <option value="<%= master.id %>" data-name="<%= master.name %>"><%= master.name %></option>
-          <% }) %>
-        </select>
-      </label>
-      <label data-category-section="equipment" hidden>Equipment & instruments master
-        <select id="equipment_master_id" name="equipment_master_id">
-          <option value="">Not linked to equipment</option>
-          <% equipment.forEach(master=>{ %>
-            <option value="<%= master.id %>" data-name="<%= master.name %>"><%= master.name %></option>
-          <% }) %>
-        </select>
-      </label>
+      <div data-category-section="glassware" hidden>
+        <%- include('../partials/master-autocomplete', {
+          label: 'Glassware',
+          fieldName: 'glassware_master_id',
+          inputId: 'glassware_search',
+          listId: 'glassware_options',
+          options: glassware,
+          selectedId: null,
+          selectedName: null,
+          disabledUntilChemicalType: false,
+          initiallyHidden: false,
+          required: false
+        }) %>
+      </div>
+      <div data-category-section="equipment" hidden>
+        <%- include('../partials/master-autocomplete', {
+          label: 'Equipment & instruments',
+          fieldName: 'equipment_master_id',
+          inputId: 'equipment_search',
+          listId: 'equipment_options',
+          options: equipment,
+          selectedId: null,
+          selectedName: null,
+          disabledUntilChemicalType: false,
+          initiallyHidden: false,
+          required: false
+        }) %>
+      </div>
     <% } else if(item.glassware_master_id){ %>
-      <label>Glassware master<input value="<%= item.glassware_master_name %>" readonly></label>
+      <label>Glassware<input value="<%= item.glassware_master_name %>" readonly></label>
     <% } else if(item.equipment_master_id){ %>
-      <label>Equipment & instruments master<input value="<%= item.equipment_master_name %>" readonly></label>
+      <label>Equipment & instruments<input value="<%= item.equipment_master_name %>" readonly></label>
     <% } %>
     <% if(item){ %>
       <label>Item type
@@ -212,7 +224,9 @@
   const chemicalNameControls = document.querySelectorAll('#chemical_search, #chemical_id, #chemical_options button');
   const stockNameField = document.getElementById('stock_name_field');
   const stockName = document.getElementById('name');
+  const glasswareSearch = document.getElementById('glassware_search');
   const glasswareMaster = document.getElementById('glassware_master_id');
+  const equipmentSearch = document.getElementById('equipment_search');
   const equipmentMaster = document.getElementById('equipment_master_id');
   const glasswareFields = document.getElementById('glassware_fields');
   const equipmentFields = document.getElementById('equipment_fields');
@@ -385,8 +399,10 @@
       input.required = hasEquipmentMaster;
     });
     if (isNewInventory) {
-      glasswareMaster.required = activeCategory === 'glassware';
-      equipmentMaster.required = activeCategory === 'equipment';
+      glasswareMaster.required = false;
+      glasswareSearch.required = activeCategory === 'glassware';
+      equipmentMaster.required = false;
+      equipmentSearch.required = activeCategory === 'equipment';
       glasswareMaster.disabled = activeCategory !== 'glassware';
       equipmentMaster.disabled = activeCategory !== 'equipment';
     }
@@ -411,8 +427,20 @@
       section.hidden = section.dataset.categorySection !== category;
     });
     if (category !== 'chemical') chemicalForm.value = '';
-    if (category !== 'glassware') glasswareMaster.value = '';
-    if (category !== 'equipment') equipmentMaster.value = '';
+    if (category !== 'glassware') {
+      glasswareMaster.value = '';
+      if (glasswareSearch) {
+        glasswareSearch.value = '';
+        glasswareSearch.setCustomValidity('');
+      }
+    }
+    if (category !== 'equipment') {
+      equipmentMaster.value = '';
+      if (equipmentSearch) {
+        equipmentSearch.value = '';
+        equipmentSearch.setCustomValidity('');
+      }
+    }
     stockName.value = '';
     stockName.readOnly = false;
     stockName.disabled = false;
@@ -531,8 +559,9 @@
       if (other) other.value = '';
       chemicalForm.value = '';
       updateChemicalFields(false);
-      const option = select.selectedOptions[0];
-      stockName.value = option.dataset.name;
+      stockName.value = select === glasswareMaster
+        ? glasswareSearch.value
+        : equipmentSearch.value;
       stockName.readOnly = true;
       itemType.value = 'ASSET';
       itemType.disabled = true;
@@ -570,7 +599,15 @@
     if (isChemical) {
       if (isNewInventory) {
         if (glasswareMaster) glasswareMaster.value = '';
+        if (glasswareSearch) {
+          glasswareSearch.value = '';
+          glasswareSearch.setCustomValidity('');
+        }
         if (equipmentMaster) equipmentMaster.value = '';
+        if (equipmentSearch) {
+          equipmentSearch.value = '';
+          equipmentSearch.setCustomValidity('');
+        }
         stockName.readOnly = false;
         itemType.disabled = false;
       }
@@ -615,8 +652,20 @@
   categoryTabs.forEach(tab => {
     tab.addEventListener('click', () => selectInventoryCategory(tab.dataset.inventoryCategory));
   });
-  if (glasswareMaster) glasswareMaster.addEventListener('change', () => applyInventoryMasterChoice(glasswareMaster));
-  if (equipmentMaster) equipmentMaster.addEventListener('change', () => applyInventoryMasterChoice(equipmentMaster));
+  if (glasswareSearch) {
+    glasswareSearch.addEventListener('master-selection', () => applyInventoryMasterChoice(glasswareMaster));
+    glasswareSearch.addEventListener('input', () => {
+      glasswareMaster.value = '';
+      applyInventoryMasterChoice(glasswareMaster);
+    });
+  }
+  if (equipmentSearch) {
+    equipmentSearch.addEventListener('master-selection', () => applyInventoryMasterChoice(equipmentMaster));
+    equipmentSearch.addEventListener('input', () => {
+      equipmentMaster.value = '';
+      applyInventoryMasterChoice(equipmentMaster);
+    });
+  }
   document.getElementById('calibration_required').addEventListener('change', updateCalibrationFrequencyVisibility);
   if (categoryTabs.length) selectInventoryCategory(activeCategory);
   updateInventoryMasterFields();

@@ -1,25 +1,39 @@
 .brand-logo{display:block;width:auto;height:44px;max-width:180px;object-fit:contain}
 .inventory-table-card{overflow:visible}
-.inventory-table{border-collapse:separate;border-spacing:0 8px}
+.inventory-list-shell{width:calc(100% - 72px);max-width:none;min-width:0;margin:0 0 0 72px;padding-right:28px;padding-left:28px}
+.inventory-page-head{margin-bottom:14px}
+.inventory-table-card{width:100%}
+.inventory-table{width:100%;min-width:980px;table-layout:fixed;border-collapse:separate;border-spacing:0 8px}
+.inventory-table th:nth-child(1){width:38%}
+.inventory-table th:nth-child(2){width:12%}
+.inventory-table th:nth-child(3){width:17%}
+.inventory-table th:nth-child(4){width:10%}
+.inventory-table th:nth-child(5){width:23%}
+.inventory-table th.actions-heading{text-align:right}
 .inventory-table tbody tr{box-shadow:0 0 0 1px var(--line);border-radius:10px}
 .inventory-table td{vertical-align:top}
+.inventory-table tbody td{padding:14px 16px}
 .inventory-table tbody td{background:var(--panel);border:0}
 .inventory-table tbody td:first-child{border-radius:10px 0 0 10px}
 .inventory-table tbody td:last-child{border-radius:0 10px 10px 0}
 .inventory-table td.actions{display:table-cell;text-align:right}
 .inventory-table .actions a,.inventory-table .actions form{display:block;width:max-content;margin-left:auto}
-.inventory-item>strong{display:block}
-.item-subdetails,.chemical-summary{display:flex;flex-wrap:wrap;align-items:center;gap:4px 10px;color:var(--muted);font-size:10px}
+.inventory-item>strong{display:block;font-size:15px;line-height:1.3}
+.item-subdetails,.chemical-summary{display:flex;flex-wrap:wrap;align-items:center;gap:5px 10px;color:var(--muted);font-size:10px}
 .item-reference{font-weight:650;color:#626771}
-.chemical-summary{margin-top:7px;gap:5px}
+.chemical-summary{margin-top:8px;gap:5px}
+.chemical-summary span{font-size:10px;text-transform:capitalize}
 .chemical-summary span{padding:2px 7px;border:1px solid var(--line);border-radius:999px;background:#fafbfc}
 .purchase-details{position:relative;margin-top:7px}
 .purchase-details summary{width:max-content;color:#59616d;font-size:10px;cursor:pointer}
 .purchase-details summary:hover{color:var(--text)}
-.purchase-details dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px 12px;margin:9px 0 0}
+.purchase-details dl{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px 14px;margin:9px 0 0;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
 .purchase-details dl>div{min-width:0}
 .purchase-details dt{color:#9297a0;font-size:9px;text-transform:uppercase;letter-spacing:.05em}
-.purchase-details dd{margin:1px 0 0;overflow-wrap:anywhere;font-size:10px}
+.purchase-details dd{margin:2px 0 0;overflow-wrap:anywhere;font-size:11px}
+.stock-balance{display:flex;align-items:baseline;gap:7px}
+.stock-balance strong{font-size:16px;line-height:1.2}
+.stock-balance span{color:var(--muted);font-size:9px}
 .toolbar .button{white-space:nowrap}
 .nav-dropdown{position:relative;display:flex;align-items:center}
 [hidden]{display:none!important}
@@ -243,6 +257,20 @@
 .stock-unit-total span{font-size:11px;font-weight:650}
 .stock-unit-total small{color:var(--muted);font-size:10px}
 @media(max-width:900px){.inventory-table-card{overflow-x:auto}}
+@media(max-width:700px){
+  .inventory-list-shell{width:100%;max-width:none;margin:0;padding-right:12px;padding-left:12px}
+  .inventory-table-card{overflow-x:visible}
+  .inventory-table{min-width:0;table-layout:auto}
+  .inventory-table thead{display:none}
+  .inventory-table,.inventory-table tbody,.inventory-table tr,.inventory-table td{display:block;width:100%}
+  .inventory-table tbody{display:grid;gap:10px}
+  .inventory-table tbody tr{display:grid;gap:0;padding:12px}
+  .inventory-table tbody td{padding:8px 4px;border-radius:0!important}
+  .inventory-table td.actions{text-align:left}
+  .inventory-table .actions a,.inventory-table .actions form{display:inline-flex;margin:0}
+  .inventory-table .actions{justify-content:flex-start;flex-wrap:wrap;gap:12px}
+  .purchase-details dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media(max-width:600px){.batch-record-card{align-items:flex-start;flex-direction:column}.receiving-record{padding:16px}.receiving-record-header,.receiving-record-footer{flex-direction:column}.receiving-record-reference{text-align:left}.receiving-record-footer p{max-width:none}.receiving-record-signatures{grid-template-columns:1fr;gap:38px}}
 .overview-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 16px}
 .overview-heading h1{margin:0;font-size:25px}

@@ -1,13 +1,20 @@
+<div class="page-head inventory-page-head">
+  <div>
+    <div class="eyebrow">INVENTORY</div>
+    <h1>Stock register</h1>
+    <p class="muted">Review stock, receiving details, batch information and availability.</p>
+  </div>
+</div>
 <form class="toolbar" method="get">
-  <input name="q" value="<%= query %>" placeholder="Search stock, batch, vendor or name…">
-  <button class="secondary">Filter</button>
+  <input name="q" value="<%= query %>" placeholder="Search item, batch, vendor or reference…">
+  <button class="secondary">Search</button>
   <% if(user.permissions.includes('INVENTORY_CREATE')){ %>
     <a class="primary button" href="/inventory/new">Add item</a>
   <% } %>
 </form>
 <section class="card inventory-table-card">
   <table class="inventory-table">
-    <thead><tr><th>Item</th><th>Type</th><th>Stock balance</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Item and details</th><th>Type</th><th>Stock balance</th><th>Status</th><th class="actions-heading">Actions</th></tr></thead>
     <tbody>
       <% if(!items.length){ %><tr><td colspan="5" class="empty">No inventory found.</td></tr><% } %>
       <% items.forEach(i=>{ %>
@@ -50,7 +57,7 @@
                 <span>Expires <%= i.expiry_date || '—' %></span>
               </div>
               <details class="purchase-details">
-                <summary>Purchase details</summary>
+                <summary>Receiving and purchase details</summary>
                 <dl>
                   <div><dt>Vendor</dt><dd><%= i.vendor_name || '—' %></dd></div>
                   <div><dt>Bill no.</dt><dd><%= i.vendor_bill_no || '—' %></dd></div>
@@ -66,9 +73,8 @@
           </td>
           <td><span class="tag"><%= i.chemical_form?'CHEMICAL':i.glassware_master_id?'GLASSWARE':i.equipment_master_id?'EQUIPMENT':i.item_type %></span></td>
           <td>
-            <strong><%= i.quantity %> <%= i.unit %></strong>
-            <small>Minimum: <%= i.minimum_stock %> <%= i.unit %></small>
-            <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> each · total left <%= Number(i.quantity*i.container_capacity).toLocaleString() %> <%= i.container_unit %></small><% } %>
+            <div class="stock-balance"><strong><%= i.quantity %> <%= i.unit %></strong><span>Available</span></div>
+            <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> per container · <%= Number(i.quantity*i.container_capacity).toLocaleString() %> <%= i.container_unit %> total</small><% } %>
           </td>
           <td><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td>
           <td class="actions">
