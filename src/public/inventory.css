@@ -1,14 +1,15 @@
 .brand-logo{display:block;width:auto;height:44px;max-width:180px;object-fit:contain}
-.inventory-table-card{overflow:visible}
+.inventory-table-card{overflow-x:auto;overflow-y:visible}
 .inventory-list-shell{width:calc(100% - 72px);max-width:none;min-width:0;margin:0 0 0 72px;padding-right:28px;padding-left:28px}
 .inventory-page-head{margin-bottom:14px}
 .inventory-table-card{width:100%}
 .inventory-table{width:100%;min-width:980px;table-layout:fixed;border-collapse:separate;border-spacing:0 8px}
-.inventory-table th:nth-child(1){width:38%}
-.inventory-table th:nth-child(2){width:12%}
-.inventory-table th:nth-child(3){width:17%}
-.inventory-table th:nth-child(4){width:10%}
-.inventory-table th:nth-child(5){width:23%}
+.inventory-table th:nth-child(1){width:35%}
+.inventory-table th:nth-child(2){width:10%}
+.inventory-table th:nth-child(3){width:15%}
+.inventory-table th:nth-child(4){width:8%}
+.inventory-table th:nth-child(5){width:10%}
+.inventory-table th:nth-child(6){width:22%}
 .inventory-table th.actions-heading{text-align:right}
 .inventory-table tbody tr{box-shadow:0 0 0 1px var(--line);border-radius:10px}
 .inventory-table td{vertical-align:top}
@@ -331,6 +332,58 @@ html[data-theme="night"] .inventory-entry-form form[data-chemical-type-locked="t
 html[data-theme="night"] .inventory-entry-form form[data-chemical-type-locked="true"] [data-chemical-type-required] select,
 html[data-theme="night"] .inventory-entry-form form[data-chemical-type-locked="true"] [data-chemical-type-required] textarea{background:#2a2e36;color:#9da4b0}
 @media(max-width:1000px){.overview-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}}
+@media(max-width:900px){
+  .inventory-list-shell{width:100%;max-width:none;margin:0;padding:20px 12px 40px}
+  .inventory-table-card{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .inventory-table{min-width:900px}
+  .inventory-table th,.inventory-table td{padding-right:12px;padding-left:12px}
+  .toolbar{width:100%}
+  .toolbar input{min-width:0}
+  .purchase-details dl{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:640px){
+  .inventory-list-shell{padding:16px 10px 32px}
+  .inventory-page-head{gap:10px}
+  .toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto}
+  .toolbar input{width:100%;grid-column:1/-1}
+  .toolbar .primary.button{justify-self:end}
+  .inventory-table-card{overflow:visible}
+  .inventory-table{display:block;width:100%;min-width:0;border-spacing:0 10px}
+  .inventory-table thead{display:none}
+  .inventory-table tbody{display:grid;gap:10px}
+  .inventory-table tbody tr{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:0;
+    width:100%;
+    box-shadow:0 0 0 1px var(--line);
+  }
+  .inventory-table tbody td{
+    min-width:0;
+    border-radius:0!important;
+    border-right:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+  }
+  .inventory-table tbody td:nth-child(2n){border-right:0}
+  .inventory-table tbody td:nth-last-child(-n+2){border-bottom:0}
+  .inventory-table tbody td[data-label]::before{
+    display:block;
+    margin-bottom:4px;
+    color:#9297a0;
+    content:attr(data-label);
+    font-size:8px;
+    font-weight:800;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .inventory-table .inventory-item{grid-column:1/-1;border-right:0}
+  .inventory-table td.actions{grid-column:1/-1;border-right:0;text-align:left}
+  .inventory-table .actions{display:flex;flex-wrap:wrap;justify-content:flex-start;gap:8px 12px}
+  .inventory-table .actions a,.inventory-table .actions form{display:inline-flex;width:auto;margin-left:0}
+  .inventory-table td[data-label="Actions"]::before{margin-bottom:8px}
+  .purchase-details dl{grid-template-columns:minmax(0,1fr)}
+  .inventory-item>strong{overflow-wrap:anywhere}
+}
 @media(min-width:1440px){.inventory-entry-form>.grid-form{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:640px){
   .chemical-selection-row{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr);gap:10px}

@@ -11,7 +11,9 @@
   </p>
   <form method="post" action="<%= action %>" class="stack">
     <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label>Quantity to add *<input type="number" step="<%= item.chemical_form?'1':'0.001' %>" min="<%= item.chemical_form?'1':'0.001' %>" name="quantity" required></label>
+    <label><%= item.chemical_form?'Package count to add':'Quantity to add' %> *
+      <input type="number" step="<%= item.chemical_form?'1':'0.001' %>" min="<%= item.chemical_form?'1':'0.001' %>" name="quantity" required>
+    </label>
     <p class="muted"><%= item.chemical_form
       ? `Enter a whole number of units. Each ${item.unit} contains ${item.container_capacity} ${item.container_unit}. The batch and expiry details remain unchanged.`
       : 'Added quantity will be recorded in the stock history.' %></p>

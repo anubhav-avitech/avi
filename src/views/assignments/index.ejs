@@ -28,7 +28,7 @@
                 <label>Note<input name="note" maxlength="500" placeholder="Optional note"></label>
                 <button class="secondary">Record consumption</button>
               </form>
-            <% } else if(balance>0&&r.item_type==='ASSET'&&!r.chemical_form&&user.permissions.includes('ASSIGNMENT_RETURN')){ %>
+            <% } else if(balance>0&&(r.item_type==='ASSET'||r.chemical_form)&&user.permissions.includes('ASSIGNMENT_RETURN')){ %>
               <form method="post" action="/assignments/<%= r.id %>/return" class="movement-form">
                 <input type="hidden" name="_csrf" value="<%= csrfToken %>">
                 <label>Return quantity<input type="number" step="<%= r.chemical_form?'1':'0.001' %>" min="<%= r.chemical_form?'1':'0.001' %>" max="<%= balance %>" name="quantity" required></label>

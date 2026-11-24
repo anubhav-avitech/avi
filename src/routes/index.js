@@ -276,7 +276,12 @@ router.post('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE')
     res.redirect('/inventory');
   } catch (error) {
     if (error.code === 'ER_DUP_ENTRY') {
-      setFlash(req, 'Asset code or serial number already exists.', 'error');
+      setFlash(
+        req.body.chemical_form
+          ? 'This batch number already exists for the selected chemical.'
+          : 'Asset code or serial number already exists.',
+        'error'
+      );
       return res.redirect('/inventory/new');
     }
     if (error.message === 'FORBIDDEN') {
@@ -316,6 +321,14 @@ router.post('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE')
     }
     if (error.message === 'INVALID_CHEMICAL') {
       setFlash(req, 'Enter a batch number, expiry date, valid container capacity and matching unit.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'DUPLICATE_BATCH') {
+      setFlash(req, 'This batch number already exists for the selected chemical.', 'error');
+      return res.redirect('/inventory/new');
+    }
+    if (error.message === 'CHEMICAL_TYPE_MISMATCH') {
+      setFlash(req, 'The selected chemical type does not match this chemical master.', 'error');
       return res.redirect('/inventory/new');
     }
     next(error);

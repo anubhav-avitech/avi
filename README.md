@@ -179,5 +179,19 @@ Glassware, and Equipment master permissions. Administrators receive all four
 permissions. Inventory users receive only the permissions enabled on their
 edit page in Inventory Team.
 
+For existing installations adding chemical type and receipt tracking, back up
+the database and run this one-time migration:
+
+```bash
+mysql -u root -p < database/migrate-flexible-chemical-batches.sql
+```
+
+It adds Liquid/Powder classification and batch receipt fields, converts
+legacy chemical stock, assignments, and transaction balances from container
+counts to measurement quantities, and retains existing receipt history.
+Duplicate legacy chemical/batch rows are preserved; their batch keys remain
+unset while the database prevents future duplicate keys. Do not rerun this
+migration; its quantity conversion is intended to run once.
+
 Do not run `database/schema.sql` on an existing database whose data must be
 preserved; it drops and recreates the application tables.

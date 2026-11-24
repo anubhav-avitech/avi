@@ -4,6 +4,52 @@ const { randomUUID } = require('crypto');
 const MAX_QUANTITY = 999999999.999;
 const DEFAULT_MINIMUM_STOCK = 15;
 
+const UNIT_ALIASES = {
+  L: 'L', l: 'L', LITER: 'L', Liter: 'L',
+  ML: 'ml', ml: 'ml', milliliter: 'ml',
+  KG: 'kg', kg: 'kg', Kg: 'kg', kilogram: 'kg',
+  G: 'g', g: 'g', Gram: 'g', gram: 'g',
+  MG: 'mg', mg: 'mg', milligram: 'mg'
+};
+
+const LIQUID_UNITS = new Set(['L', 'ml']);
+const POWDER_UNITS = new Set(['kg', 'g', 'mg']);
+
+function normalizeUnit(unit) {
+  return UNIT_ALIASES[String(unit || '').trim()] || null;
+}
+
+function allowedUnitsFor(form) {
+  return form === 'LIQUID'
+    ? ['L', 'ml']
+    : form === 'POWDER'
+      ? ['kg', 'g', 'mg']
+      : [];
+}
+
+function toBaseUnit(quantity, unit) {
+  const normalized = normalizeUnit(unit);
+  const value = Number(quantity);
+  if (!Number.isFinite(value) || value < 0) throw new Error('INVALID_QUANTITY');
+  if (LIQUID_UNITS.has(normalized)) return normalized === 'L' ? value * 1000 : value;
+  if (POWDER_UNITS.has(normalized)) {
+    if (normalized === 'kg') return value * 1000000;
+    if (normalized === 'g') return value * 1000;
+    return value;
+  }
+  throw new Error('INVALID_UNIT');
+}
+
+function formatBaseQuantity(base, form) {
+  if (form === 'LIQUID') {
+    const liters = base / 1000;
+    return `${Number(liters.toFixed(3)).toLocaleString()} L`;
+  }
+  if (base >= 1000000) return `${Number((base / 1000000).toFixed(3)).toLocaleString()} KG`;
+  if (base >= 1000) return `${Number((base / 1000).toFixed(3)).toLocaleString()} G`;
+  return `${Number(base.toFixed(3)).toLocaleString()} MG`;
+}
+
 function normalizeQuantity(value) {
   const quantity = Number(value);
   if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) {
@@ -17,19 +63,19 @@ function chemicalDetails(data, chemicalName, existingPackageUnit) {
   if (!form) return null;
   if (!['LIQUID', 'POWDER'].includes(form)) throw new Error('INVALID_CHEMICAL');
 
-  const packageUnit = String(data.unit || '');
+  const packageUnit = String(data.packaging_type || data.unit || '').trim();
   const validPackageUnits = [
     'Piece', 'Bottle', 'Box', 'Pair', 'Pack', 'Package', 'Case', 'Carton', 'Tray',
     'Bag', 'Drum', 'Jar', 'Can', 'Tin', 'Pouch', 'Sachet', 'Packet', 'Vial',
     'Ampoule', 'Tube', 'Kit', 'Set'
   ];
   const isUnchangedLegacyUnit = packageUnit === existingPackageUnit &&
-    ['Kg', 'Gram', 'Liter', 'ml'].includes(packageUnit);
+    ['Kg', 'Gram', 'Liter', 'ml', 'kg', 'g', 'mg', 'L'].includes(packageUnit);
   const rawCapacity = String(data.container_capacity || '');
   if (!/^\d+(?:\.\d{1,3})?$/.test(rawCapacity)) throw new Error('INVALID_CHEMICAL');
   const capacity = normalizeQuantity(rawCapacity);
-  const unit = String(data.container_unit || '');
-  const validUnits = form === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
+  const unit = normalizeUnit(data.container_unit);
+  const validUnits = allowedUnitsFor(form);
   const batchNumber = String(data.batch_number || '').trim();
   const expiryDate = String(data.expiry_date || '');
   const parsedExpiry = new Date(`${expiryDate}T00:00:00Z`);
@@ -165,7 +211,12 @@ function inventoryMasterDetails(data, type) {
 
 function normalizeStockQuantity(value, chemical) {
   const quantity = normalizeQuantity(value);
-  if (chemical && !Number.isInteger(quantity)) throw new Error('INVALID_QUANTITY');
+  if (chemical) {
+    const raw = String(value).trim();
+    if (!/^(?:\d+(?:\.\d{1,6})?|\.\d{1,6})$/.test(raw)) {
+      throw new Error('INVALID_QUANTITY');
+    }
+  }
   return quantity;
 }
 
@@ -225,7 +276,49 @@ async function list(user, search) {
   }
   sql += ' ORDER BY COALESCE(c.name,i.name) ASC,i.batch_number ASC,i.updated_at DESC';
   const [rows] = await db.query(sql, params);
-  return rows;
+  const chemicalGroups = new Map();
+  const result = [];
+  for (const row of rows) {
+    if (!row.chemical_id) {
+      result.push(row);
+      continue;
+    }
+    if (!chemicalGroups.has(row.chemical_id)) {
+      const copy = { ...row, batch_count: 0, aggregate_base: 0 };
+      chemicalGroups.set(row.chemical_id, copy);
+    }
+    const group = chemicalGroups.get(row.chemical_id);
+    group.batch_count += 1;
+    const batchAvailable = Number(row.quantity);
+    try {
+      const batchUnit = row.chemical_form === 'LIQUID'
+        ? normalizeUnit(row.container_unit)
+        : normalizeUnit(row.container_unit);
+      const base = toBaseUnit(batchAvailable, batchUnit);
+      group.aggregate_base += base;
+    } catch (_) {}
+  }
+  for (const group of chemicalGroups.values()) {
+    const form = group.chemical_form;
+    if (form === 'LIQUID') {
+      group.quantity = Number((group.aggregate_base / 1000).toFixed(3));
+      group.unit = 'L';
+    } else if (form === 'POWDER') {
+      if (group.aggregate_base >= 1000000) {
+        group.quantity = Number((group.aggregate_base / 1000000).toFixed(3));
+        group.unit = 'KG';
+      } else if (group.aggregate_base >= 1000) {
+        group.quantity = Number((group.aggregate_base / 1000).toFixed(3));
+        group.unit = 'G';
+      } else {
+        group.quantity = Number(group.aggregate_base.toFixed(3));
+        group.unit = 'MG';
+      }
+    }
+    group.name = group.chemical_master_name || group.name;
+    result.push(group);
+  }
+  return result;
 }
 
 async function get(id) {
@@ -302,9 +395,40 @@ async function create(data, user) {
   try {
     await conn.beginTransaction();
     const form = String(data.chemical_form || '').toUpperCase();
-    const chemicalMaster = form
-      ? await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER')
-      : null;
+    let chemicalMaster = null;
+    if (form) {
+      const chemicalName = String(data.chemical_name || '').trim();
+      if (data.chemical_id) {
+        chemicalMaster = await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER');
+        const [masterRows] = await conn.query(
+          'SELECT id,name,chemical_type FROM chemical_master WHERE id=? FOR UPDATE',
+          [chemicalMaster.id]
+        );
+        chemicalMaster = masterRows[0];
+        if (!chemicalMaster?.chemical_type) {
+          await conn.query(
+            'UPDATE chemical_master SET chemical_type=? WHERE id=?',
+            [form, chemicalMaster.id]
+          );
+          chemicalMaster.chemical_type = form;
+        }
+        if (chemicalMaster.chemical_type !== form) throw new Error('CHEMICAL_TYPE_MISMATCH');
+      } else {
+        if (!chemicalName || chemicalName.length > 150) throw new Error('INVALID_CHEMICAL_MASTER');
+        const [inserted] = await conn.query(
+          'INSERT INTO chemical_master(name,chemical_type) VALUES(?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)',
+          [chemicalName, form]
+        );
+        const [masterRows] = await conn.query(
+          'SELECT id,name,chemical_type FROM chemical_master WHERE id=? FOR UPDATE',
+          [inserted.insertId]
+        );
+        chemicalMaster = masterRows[0];
+        if (!chemicalMaster || chemicalMaster.chemical_type !== form) {
+          throw new Error('CHEMICAL_TYPE_MISMATCH');
+        }
+      }
+    }
     if (chemicalMaster && (data.glassware_master_id || data.equipment_master_id)) {
       throw new Error('INVALID_ITEM_MASTER');
     }
@@ -321,7 +445,23 @@ async function create(data, user) {
     const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
     const chemical = chemicalDetails(data, chemicalMaster?.name);
     if (chemical && inventoryMaster) throw new Error('INVALID_ITEM_MASTER');
-    const quantity = normalizeStockQuantity(data.quantity, chemical);
+    const packageCountRaw = String(data.package_count ?? data.quantity ?? '').trim();
+    const quantityPerPackage = chemical ? chemical.capacity : null;
+    let packageCount = null;
+    let quantity;
+    if (chemical) {
+      packageCount = normalizeStockQuantity(packageCountRaw, true);
+      if (!Number.isInteger(packageCount)) throw new Error('INVALID_QUANTITY');
+      quantity = packageCount * quantityPerPackage;
+      if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) throw new Error('INVALID_QUANTITY');
+      const [duplicate] = await conn.query(
+        'SELECT id FROM inventory_items WHERE chemical_id=? AND batch_number=? LIMIT 1',
+        [chemicalMaster.id, chemical.batchNumber]
+      );
+      if (duplicate.length) throw new Error('DUPLICATE_BATCH');
+    } else {
+      quantity = normalizeStockQuantity(data.quantity, chemical);
+    }
     const itemType = chemical || (!inventoryMaster && data.item_type === 'CONSUMABLE') ? 'CONSUMABLE' : 'ASSET';
     const assetPrefix = chemical ? 'CHEM' : glasswareMaster ? 'GLS' : equipmentMaster ? 'EQP' : 'STK';
     assetCode = `${assetPrefix}-${randomUUID().toUpperCase()}`;
@@ -339,17 +479,17 @@ async function create(data, user) {
     const vendorBillNo = String(data.vendor_bill_no || '').trim();
     const makeGrade = String(data.make_grade || '').trim();
     const receivedBy = await validateReceivedBy(conn, data.received_by, user);
-    const stockUnit = chemical ? chemical.packageUnit : data.unit || 'Piece';
+    const stockUnit = chemical ? chemical.unit : data.unit || 'Piece';
     const productId = await productIdFor(conn, name, itemType, stockUnit, minimumStock);
     const [result] = await conn.query(`
       INSERT INTO inventory_items(
         product_id,chemical_id,vendor_id,glassware_master_id,equipment_master_id,asset_code,name,item_type,category,description,serial_number,
-        quantity,unit,status,location,batch_number,manufacturer,
+        quantity,unit,status,location,batch_number,chemical_batch_key,manufacturer,
         vendor_name,vendor_bill_no,make_grade,received_by,received_date,expiry_date,
         glassware_type,capacity,capacity_unit,material,glass_class,graduation,
         equipment_type,model_number,technical_specifications,calibration_required,calibration_frequency,warranty_applicable,
-        chemical_form,container_capacity,container_unit
-      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        chemical_form,container_capacity,container_unit,package_count,packaging_type
+      ) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `, [
       productId,
       chemicalMaster?.id || null,
@@ -367,6 +507,7 @@ async function create(data, user) {
       'AVAILABLE',
       data.location || null,
       chemical ? chemical.batchNumber : data.batch_number || null,
+      chemical ? chemical.batchNumber : null,
       data.manufacturer || null,
       vendorName || null,
       vendorBillNo || null,
@@ -388,9 +529,23 @@ async function create(data, user) {
       masterDetails.warranty_applicable,
       chemical?.form || null,
       chemical?.capacity || null,
-      chemical?.unit || null
+      chemical?.unit || null,
+      packageCount,
+      chemical?.packageUnit || null
     ]);
     inventoryId = result.insertId;
+    if (chemical) {
+      await conn.query(`
+        INSERT INTO inventory_stock_receipts(
+          inventory_id,package_count,package_capacity,measurement_unit,received_quantity,
+          packaging_type,receipt_date,vendor_id,vendor_bill_no,received_by,created_by
+        ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
+      `, [
+        inventoryId, packageCount, chemical.capacity, chemical.unit, quantity,
+        chemical.packageUnit, receivedDate || null, vendorMaster?.id || null,
+        vendorBillNo || null, receivedBy || null, user.id
+      ]);
+    }
     await conn.query(
       'INSERT INTO inventory_transactions(inventory_id,actor_id,action,quantity,unit,details) VALUES(?,?,?,?,?,?)',
       [inventoryId, user.id, 'ADD', quantity, stockUnit, JSON.stringify({
@@ -448,12 +603,23 @@ async function restock(id, rawQuantity, user) {
     if (!['AVAILABLE', 'ASSIGNED'].includes(item.status)) throw new Error('STOCK_NOT_AVAILABLE');
 
     const chemical = Boolean(item.chemical_form);
-    const quantity = normalizeStockQuantity(rawQuantity, chemical);
+    let quantity = normalizeStockQuantity(rawQuantity, chemical);
+    if (chemical) {
+      if (!Number.isInteger(Number(rawQuantity))) throw new Error('INVALID_QUANTITY');
+      quantity = quantity * Number(item.container_capacity);
+      if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) {
+        throw new Error('INVALID_QUANTITY');
+      }
+    }
     const balance = Number(item.quantity) + quantity;
     if (balance > MAX_QUANTITY) throw new Error('STOCK_LIMIT');
     await conn.query(
-      "UPDATE inventory_items SET quantity=?,status='AVAILABLE' WHERE id=?",
-      [balance, id]
+      `UPDATE inventory_items
+       SET quantity=?,
+           package_count=CASE WHEN chemical_form IS NOT NULL THEN COALESCE(package_count,0)+? ELSE package_count END,
+           status='AVAILABLE'
+       WHERE id=?`,
+      [balance, chemical ? Number(rawQuantity) : 0, id]
     );
     await conn.query(
       'INSERT INTO inventory_transactions(inventory_id,actor_id,action,quantity,unit,details) VALUES(?,?,?,?,?,?)',
@@ -466,6 +632,18 @@ async function restock(id, rawQuantity, user) {
         balance_after: balance
       })]
     );
+    if (chemical) {
+      await conn.query(`
+        INSERT INTO inventory_stock_receipts(
+          inventory_id,package_count,package_capacity,measurement_unit,received_quantity,
+          packaging_type,receipt_date,created_by
+        ) VALUES(?,?,?,?,?,?,CURDATE(),?)
+      `, [
+        id, rawQuantity, item.container_capacity,
+        item.container_unit || item.unit, quantity,
+        item.packaging_type || item.unit, user.id
+      ]);
+    }
     await conn.commit();
     await audit(user.id, 'INVENTORY_RESTOCKED', 'inventory_items', id, {
       quantity,
@@ -592,6 +770,15 @@ async function update(id, data, user) {
     const chemicalMaster = chemicalForm
       ? await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER')
       : null;
+    if (chemicalMaster) {
+      const [masterRows] = await conn.query(
+        'SELECT id,chemical_type FROM chemical_master WHERE id=?',
+        [chemicalMaster.id]
+      );
+      if (masterRows[0]?.chemical_type && masterRows[0].chemical_type !== chemicalForm) {
+        throw new Error('CHEMICAL_TYPE_MISMATCH');
+      }
+    }
     const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
     const chemical = chemicalDetails(data, chemicalMaster?.name, old.unit);
     const inventoryMaster = old.glassware_master_id
@@ -766,6 +953,12 @@ async function assign(id, employeeId, rawQuantity, remarks, actor) {
     item = items[0];
 
     quantity = normalizeStockQuantity(rawQuantity, Boolean(item.chemical_form));
+    if (item.chemical_form) {
+      const stockUnit = normalizeUnit(item.container_unit);
+      if (!stockUnit || !allowedUnitsFor(item.chemical_form).includes(stockUnit)) {
+        throw new Error('INVALID_UNIT');
+      }
+    }
     if (item.status !== 'AVAILABLE' || item.expired || Number(item.quantity) < quantity) {
       throw new Error('INSUFFICIENT');
     }
@@ -792,7 +985,9 @@ async function assign(id, employeeId, rawQuantity, remarks, actor) {
         container_capacity,container_unit,assigned_by
       ) VALUES(?,?,?,?,?,?,?,?,?,?,?)
     `, [
-      id, employeeId, assignmentRemarks || null, quantity, item.unit, item.chemical_form, item.batch_number,
+      id, employeeId, assignmentRemarks || null, quantity,
+      item.chemical_form ? (item.container_unit || item.unit) : item.unit,
+      item.chemical_form, item.batch_number,
       item.expiry_date, item.container_capacity, item.container_unit, actor.id
     ]);
     assignmentId = assignment.insertId;
@@ -800,7 +995,8 @@ async function assign(id, employeeId, rawQuantity, remarks, actor) {
     await conn.query(`
       INSERT INTO inventory_transactions(inventory_id,assignment_id,employee_id,actor_id,action,quantity,unit,details)
       VALUES(?,?,?,?,?,?,?,?)
-    `, [id, assignmentId, employeeId, actor.id, 'ASSIGN', quantity, item.unit,
+    `,     [id, assignmentId, employeeId, actor.id, 'ASSIGN', quantity,
+      item.chemical_form ? (item.container_unit || item.unit) : item.unit,
       JSON.stringify({
         remarks: assignmentRemarks || null,
         batch_number: item.batch_number,
@@ -822,7 +1018,7 @@ async function assign(id, employeeId, rawQuantity, remarks, actor) {
     assignment_id: assignmentId,
     employee_id: employeeId,
     quantity,
-    unit: item.unit,
+    unit: item.chemical_form ? (item.container_unit || item.unit) : item.unit,
     batch_number: item.batch_number,
     expiry_date: item.expiry_date
   }, actor.ip);
@@ -864,7 +1060,7 @@ async function assignmentMovement(assignmentId, rawQuantity, note, actor, action
     if (action === 'CONSUME' && assignment.item_type === 'ASSET') {
       throw new Error('NOT_CONSUMABLE');
     }
-    if (action === 'RETURN' && (assignment.item_type !== 'ASSET' || assignment.chemical_form)) {
+    if (action === 'RETURN' && assignment.item_type !== 'ASSET' && !assignment.chemical_form) {
       throw new Error('NOT_RETURNABLE');
     }
     quantity = normalizeStockQuantity(rawQuantity, Boolean(assignment.chemical_form));

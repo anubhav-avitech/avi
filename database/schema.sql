@@ -94,6 +94,7 @@ CREATE TABLE inventory_products (
 CREATE TABLE chemical_master (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(150) NOT NULL UNIQUE,
+  chemical_type ENUM('LIQUID','POWDER') NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -159,6 +160,7 @@ CREATE TABLE inventory_items (
   status ENUM('AVAILABLE','ASSIGNED','MAINTENANCE','LOST','DAMAGED','RETIRED') NOT NULL DEFAULT 'AVAILABLE',
   location VARCHAR(150) NULL,
   batch_number VARCHAR(100) NULL,
+  chemical_batch_key VARCHAR(100) NULL,
   manufacturer VARCHAR(150) NULL,
   vendor_name VARCHAR(150) NULL,
   vendor_bill_no VARCHAR(100) NULL,
@@ -180,7 +182,9 @@ CREATE TABLE inventory_items (
   warranty_applicable TINYINT(1) NULL,
   chemical_form ENUM('LIQUID','POWDER') NULL,
   container_capacity DECIMAL(12,3) NULL,
-  container_unit ENUM('ml','L','g','kg') NULL,
+  container_unit ENUM('L','ml','kg','g','mg') NULL,
+  package_count DECIMAL(12,3) NULL,
+  packaging_type VARCHAR(100) NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   FOREIGN KEY(product_id) REFERENCES inventory_products(id) ON DELETE RESTRICT,
@@ -196,6 +200,7 @@ CREATE TABLE inventory_items (
   INDEX idx_inventory_status(status),
   INDEX idx_inventory_type(item_type),
   INDEX idx_inventory_expiry(expiry_date),
+  UNIQUE KEY uq_inventory_chemical_batch_key(chemical_id,chemical_batch_key),
   CONSTRAINT chk_inventory_glassware_capacity CHECK(capacity IS NULL OR capacity>0),
   CONSTRAINT chk_inventory_equipment_flags CHECK(
     (calibration_required IS NULL OR calibration_required IN (0,1))
@@ -205,6 +210,27 @@ CREATE TABLE inventory_items (
     (glassware_master_id IS NULL OR equipment_master_id IS NULL)
     AND (chemical_id IS NULL OR (glassware_master_id IS NULL AND equipment_master_id IS NULL))
   )
+) ENGINE=InnoDB;
+
+CREATE TABLE inventory_stock_receipts (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  inventory_id BIGINT UNSIGNED NOT NULL,
+  package_count DECIMAL(12,3) NOT NULL,
+  package_capacity DECIMAL(12,3) NOT NULL,
+  measurement_unit VARCHAR(30) NOT NULL,
+  received_quantity DECIMAL(12,3) NOT NULL,
+  packaging_type VARCHAR(100) NULL,
+  receipt_date DATE NULL,
+  vendor_id BIGINT UNSIGNED NULL,
+  vendor_bill_no VARCHAR(100) NULL,
+  received_by VARCHAR(150) NULL,
+  created_by BIGINT UNSIGNED NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY(inventory_id) REFERENCES inventory_items(id) ON DELETE RESTRICT,
+  FOREIGN KEY(vendor_id) REFERENCES vendor_master(id) ON DELETE RESTRICT,
+  FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE SET NULL,
+  INDEX idx_stock_receipt_inventory(inventory_id),
+  INDEX idx_stock_receipt_date(receipt_date)
 ) ENGINE=InnoDB;
 
 CREATE TABLE inventory_assignments (
@@ -219,7 +245,7 @@ CREATE TABLE inventory_assignments (
   batch_number VARCHAR(100) NULL,
   expiry_date DATE NULL,
   container_capacity DECIMAL(12,3) NULL,
-  container_unit ENUM('ml','L','g','kg') NULL,
+  container_unit ENUM('L','ml','kg','g','mg') NULL,
   assigned_by BIGINT UNSIGNED NULL,
   assigned_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY(inventory_id) REFERENCES inventory_items(id) ON DELETE RESTRICT,

@@ -10,11 +10,11 @@
   itemSelect.addEventListener('change', () => {
     const option = itemSelect.selectedOptions[0];
     const isChemical = option.dataset.chemical === 'true';
-    quantityInput.step = isChemical ? '1' : '0.001';
-    quantityInput.min = isChemical ? '1' : '0.001';
+    quantityInput.step = isChemical ? '0.001' : '0.001';
+    quantityInput.min = '0.001';
     quantityInput.max = option.dataset.balance || '';
     const packageUnit = option.dataset.unit || 'units';
-    quantityLabel.firstChild.textContent = isChemical ? `Quantity issued (${packageUnit}) *` : 'Quantity *';
+    quantityLabel.firstChild.textContent = isChemical ? `Quantity issued (${option.dataset.capacityUnit}) *` : 'Quantity *';
     chemicalCodeInput.value = option.dataset.assetCode || '';
     expiryOnIssueInput.value = option.dataset.expiry || '';
     chemicalHelp.hidden = !isChemical;

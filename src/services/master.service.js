@@ -6,11 +6,17 @@ const masters = {
   chemicals: {
     table: 'chemical_master',
     label: 'Chemical',
-    nameOnly: true,
+    nameOnly: false,
     searchPlaceholder: 'Search chemical records…',
-    searchColumns: ['name'],
+    searchColumns: ['name','chemical_type'],
     referenceColumn: 'chemical_id',
-    fields: [{ name: 'name', label: 'Chemical name', required: true, maxLength: 150 }]
+    fields: [
+      { name: 'name', label: 'Chemical name', required: true, maxLength: 150 },
+      { name: 'chemical_type', label: 'Chemical type', required: true, type: 'select', options: [
+        { value: 'LIQUID', label: 'Liquid' },
+        { value: 'POWDER', label: 'Powder' }
+      ] }
+    ]
   },
   vendors: {
     table: 'vendor_master',
@@ -193,6 +199,19 @@ async function update(type, rawId, data, actor) {
     await conn.beginTransaction();
     const [existing] = await conn.query(`SELECT id FROM ${config.table} WHERE id=? FOR UPDATE`, [id]);
     if (!existing.length) throw new Error('NOT_FOUND');
+    if (type === 'chemicals') {
+      const [oldRows] = await conn.query(
+        'SELECT chemical_type FROM chemical_master WHERE id=?',
+        [id]
+      );
+      const [[{ count }]] = await conn.query(
+        'SELECT COUNT(*) AS count FROM inventory_items WHERE chemical_id=?',
+        [id]
+      );
+      if (Number(count) > 0 && oldRows[0]?.chemical_type !== values.chemical_type) {
+        throw new Error('CHEMICAL_TYPE_IMMUTABLE');
+      }
+    }
     await conn.query(
       `UPDATE ${config.table} SET ${columns.map(column => `${column}=?`).join(',')} WHERE id=?`,
       [...columns.map(column => values[column]), id]

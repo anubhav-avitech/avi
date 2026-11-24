@@ -67,6 +67,12 @@
         </select>
         <% if(item?.chemical_form){ %><input type="hidden" name="chemical_form" value="<%= item.chemical_form %>"><% } %>
       </label>
+      <% if(!item){ %>
+        <label class="chemical-create-toggle">
+          <input id="create_new_chemical" type="checkbox"> Create a new chemical
+        </label>
+        <label id="new_chemical_name_field" hidden>New chemical name *<input id="chemical_name" name="chemical_name" maxlength="150"></label>
+      <% } %>
       <%- include('../partials/master-autocomplete', {
         label: 'Chemical name',
         fieldName: 'chemical_id',
@@ -83,17 +89,21 @@
     <% if(!item){ %><p id="chemical-type-warning" class="span-2 chemical-type-warning" role="alert" hidden>Please choose a chemical type.</p><% } %>
     <div id="chemical_fields" class="span-2 grid-form" <%= item?.chemical_form?'':'hidden' %>>
       <div class="chemical-capacity-row">
+        <label>Qty received from vendor (packages) *
+          <input id="package_count" type="number" step="1" min="1" name="package_count" value="<%= item?.package_count??'' %>" <%= item?'readonly':'' %>>
+        </label>
         <label>Container capacity *
           <input type="number" step="0.001" min="0.001" name="container_capacity" value="<%= item?.container_capacity||'' %>">
         </label>
         <label>Capacity unit *
           <select name="container_unit">
-            <% ['ml','L','g','kg'].forEach(x=>{ %>
+            <% ['ml','L','mg','g','kg'].forEach(x=>{ %>
               <option value="<%= x %>" <%= (item?.container_unit||'ml')===x?'selected':'' %>><%= x %></option>
             <% }) %>
           </select>
         </label>
       </div>
+      <p id="chemical-total-preview" class="span-2 muted"></p>
     </div>
     <div id="glassware_fields" class="span-2 grid-form" <%= item?.glassware_master_id?'':'hidden' %>>
       <label>Glassware type *<input name="glassware_type" maxlength="100" data-master-required value="<%= item?.glassware_type||'' %>"></label>
@@ -133,17 +143,19 @@
         </select>
       </label>
     </div>
-    <label data-chemical-type-required>Qty received from vendor *<input id="quantity" type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
+    <label id="quantity_field" data-chemical-type-required <%= item?.chemical_form?'hidden':'' %>><%= item?'Quantity':'Qty received from vendor' %> *<input id="quantity" type="number" step="0.001" min="0.001" name="quantity" required value="<%= item?.quantity??1 %>" <%= item?'readonly':'' %>></label>
     <label id="stock_unit_field" data-chemical-type-required <%= item?.chemical_form?'hidden':'' %>>Unit *<input id="unit" name="unit" maxlength="30" value="<%= item?.unit||'Piece' %>" required <%= item?'readonly':'' %>></label>
     <label id="chemical_unit_field" data-chemical-type-required <%= item?.chemical_form?'':'hidden' %>>Package unit *
-      <select id="chemical_package_unit" name="unit" required <%= item?'disabled':'' %>>
-        <% if(item?.chemical_form && ['Kg','Gram','Liter','ml'].includes(item.unit)){ %>
-          <option value="<%= item.unit %>" selected><%= item.unit %> (existing record)</option>
+      <select id="chemical_package_unit" name="packaging_type" required <%= item?'disabled':'' %>>
+        <% const selectedPackaging=item?.packaging_type||item?.unit||'Bottle'; %>
+        <% if(item?.chemical_form && !['Bottle','Box','Bag','Drum','Jar','Can','Tin','Pouch','Sachet','Packet','Vial','Ampoule','Tube','Carton','Case','Tray','Pack','Package','Kit','Set','Piece','Pair'].includes(selectedPackaging)){ %>
+          <option value="<%= selectedPackaging %>" selected><%= selectedPackaging %> (existing record)</option>
         <% } %>
         <% ['Bottle','Box','Bag','Drum','Jar','Can','Tin','Pouch','Sachet','Packet','Vial','Ampoule','Tube','Carton','Case','Tray','Pack','Package','Kit','Set','Piece','Pair'].forEach(x=>{ %>
-          <option value="<%= x %>" <%= (item?.unit||'Bottle')===x?'selected':'' %>><%= x %></option>
+          <option value="<%= x %>" <%= selectedPackaging===x?'selected':'' %>><%= x %></option>
         <% }) %>
       </select>
+      <% if(item){ %><input type="hidden" name="packaging_type" value="<%= item.packaging_type||item.unit %>"><% } %>
     </label>
     <%- include('../partials/master-autocomplete', {
       label: 'Vendor name',
@@ -212,6 +224,7 @@
 <script>
   const chemicalForm = document.getElementById('chemical_form');
   const chemicalFields = document.getElementById('chemical_fields');
+  const quantityField = document.getElementById('quantity_field');
   const itemType = document.getElementById('item_type');
   const unit = document.getElementById('unit');
   const chemicalPackageUnit = document.getElementById('chemical_package_unit');
@@ -219,6 +232,7 @@
   const chemicalUnitField = document.getElementById('chemical_unit_field');
   const capacityUnit = document.querySelector('[name="container_unit"]');
   const quantity = document.getElementById('quantity');
+  const packageCount = document.getElementById('package_count');
   const chemicalSearch = document.getElementById('chemical_search');
   const chemicalId = document.getElementById('chemical_id');
   const chemicalNameControls = document.querySelectorAll('#chemical_search, #chemical_id, #chemical_options button');
@@ -238,6 +252,9 @@
   const inventoryForm = document.querySelector('.inventory-entry-form form');
   const chemicalTypeWarning = document.getElementById('chemical-type-warning');
   const receivedByCombobox = document.querySelector('[data-received-by]');
+  const createNewChemical = document.getElementById('create_new_chemical');
+  const newChemicalNameField = document.getElementById('new_chemical_name_field');
+  const newChemicalName = document.getElementById('chemical_name');
   let activeCategory = isNewInventory ? 'chemical' : null;
 
   function updateCalibrationFrequencyVisibility() {
@@ -574,9 +591,22 @@
     updateInventoryMasterFields();
   }
 
+  function updateChemicalTotalPreview() {
+    const preview = document.getElementById('chemical-total-preview');
+    if (!preview) return;
+    const count = Number(packageCount?.value || 0);
+    const capacity = Number(document.querySelector('[name="container_capacity"]')?.value || 0);
+    const unitValue = capacityUnit?.value || '';
+    preview.textContent = count > 0 && capacity > 0
+      ? `Live total: ${Number((count * capacity).toFixed(6)).toLocaleString()} ${unitValue}`
+      : '';
+  }
+
   function updateChemicalFields(syncInventoryMaster = true) {
     const isChemical = Boolean(chemicalForm.value);
     chemicalFields.hidden = !isChemical || (isNewInventory && activeCategory !== 'chemical');
+    quantityField.hidden = isChemical;
+    quantity.required = !isChemical;
     chemicalFields.querySelectorAll('input,select,textarea').forEach(input => {
       input.disabled = !isChemical || (isNewInventory && activeCategory !== 'chemical');
     });
@@ -615,10 +645,14 @@
       if (unit.value === 'Piece') unit.value = 'Bottle';
       chemicalPackageUnit.value = unit.value;
       unit.value = chemicalPackageUnit.value;
-      const validUnits = chemicalForm.value === 'LIQUID' ? ['ml', 'L'] : ['g', 'kg'];
+      const validUnits = chemicalForm.value === 'LIQUID' ? ['ml', 'L'] : ['mg', 'g', 'kg'];
       if (!validUnits.includes(capacityUnit.value)) {
         capacityUnit.value = chemicalForm.value === 'LIQUID' ? 'ml' : 'g';
       }
+      if (packageCount) packageCount.required = isNewInventory;
+      updateChemicalTotalPreview();
+    } else if (packageCount) {
+      packageCount.required = false;
     }
     if (!isChemical && isNewInventory && syncInventoryMaster) {
       const selectedMaster = glasswareMaster?.value ? glasswareMaster : equipmentMaster;
@@ -636,7 +670,7 @@
     Array.from(capacityUnit.options).forEach(option => {
       option.hidden = isChemical && (chemicalForm.value === 'LIQUID'
         ? !['ml', 'L'].includes(option.value)
-        : !['g', 'kg'].includes(option.value));
+        : !['mg', 'g', 'kg'].includes(option.value));
     });
     updateChemicalTypeFormLock();
     const chemicalNameDisabled = !isChemical || (isNewInventory && activeCategory !== 'chemical');
@@ -645,7 +679,29 @@
     });
   }
 
-  chemicalForm.addEventListener('change', updateChemicalFields);
+  function updateNewChemicalMode() {
+    if (!createNewChemical) return;
+    const creating = createNewChemical.checked;
+    newChemicalNameField.hidden = !creating;
+    newChemicalName.required = creating;
+    const autocomplete = chemicalSearch?.closest('[data-master-combobox]');
+    if (autocomplete) autocomplete.hidden = creating;
+    if (creating) {
+      chemicalId.value = '';
+      chemicalSearch.value = '';
+      chemicalSearch.required = false;
+    } else {
+      chemicalSearch.required = Boolean(chemicalForm.value);
+    }
+  }
+  createNewChemical?.addEventListener('change', updateNewChemicalMode);
+  chemicalForm.addEventListener('change', () => {
+    updateChemicalFields();
+    updateNewChemicalMode();
+  });
+  if (packageCount) packageCount.addEventListener('input', updateChemicalTotalPreview);
+  capacityUnit?.addEventListener('change', updateChemicalTotalPreview);
+  document.querySelector('[name="container_capacity"]')?.addEventListener('input', updateChemicalTotalPreview);
   chemicalPackageUnit.addEventListener('change', () => {
     unit.value = chemicalPackageUnit.value;
   });
@@ -670,4 +726,5 @@
   if (categoryTabs.length) selectInventoryCategory(activeCategory);
   updateInventoryMasterFields();
   updateChemicalFields();
+  updateNewChemicalMode();
 </script>
