@@ -12,13 +12,19 @@ function normalizeQuantity(value) {
   return quantity;
 }
 
-function chemicalDetails(data, chemicalName) {
+function chemicalDetails(data, chemicalName, existingPackageUnit) {
   const form = String(data.chemical_form || '').toUpperCase();
   if (!form) return null;
   if (!['LIQUID', 'POWDER'].includes(form)) throw new Error('INVALID_CHEMICAL');
 
   const packageUnit = String(data.unit || '');
-  const validPackageUnits = ['Piece', 'Bottle', 'Box', 'Pair', 'Pack', 'Kg', 'Gram', 'Liter', 'ml', 'Kit', 'Set'];
+  const validPackageUnits = [
+    'Piece', 'Bottle', 'Box', 'Pair', 'Pack', 'Package', 'Case', 'Carton', 'Tray',
+    'Bag', 'Drum', 'Jar', 'Can', 'Tin', 'Pouch', 'Sachet', 'Packet', 'Vial',
+    'Ampoule', 'Tube', 'Kit', 'Set'
+  ];
+  const isUnchangedLegacyUnit = packageUnit === existingPackageUnit &&
+    ['Kg', 'Gram', 'Liter', 'ml'].includes(packageUnit);
   const rawCapacity = String(data.container_capacity || '');
   if (!/^\d+(?:\.\d{1,3})?$/.test(rawCapacity)) throw new Error('INVALID_CHEMICAL');
   const capacity = normalizeQuantity(rawCapacity);
@@ -28,7 +34,7 @@ function chemicalDetails(data, chemicalName) {
   const expiryDate = String(data.expiry_date || '');
   const parsedExpiry = new Date(`${expiryDate}T00:00:00Z`);
   if (
-    !validPackageUnits.includes(packageUnit) ||
+    (!validPackageUnits.includes(packageUnit) && !isUnchangedLegacyUnit) ||
     !validUnits.includes(unit) ||
     !chemicalName ||
     chemicalName.length > 150 ||
@@ -587,7 +593,7 @@ async function update(id, data, user) {
       ? await selectedMaster(conn, 'chemical_master', data.chemical_id, true, 'INVALID_CHEMICAL_MASTER')
       : null;
     const vendorMaster = await selectedMaster(conn, 'vendor_master', data.vendor_id, false, 'INVALID_VENDOR_MASTER');
-    const chemical = chemicalDetails(data, chemicalMaster?.name);
+    const chemical = chemicalDetails(data, chemicalMaster?.name, old.unit);
     const inventoryMaster = old.glassware_master_id
       ? { name: old.glassware_master_name }
       : old.equipment_master_id
