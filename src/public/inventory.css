@@ -94,7 +94,8 @@
 .inventory-category-tabs button:hover{background:var(--soft);color:var(--text)}
 .inventory-category-tabs button.active{border-bottom-color:var(--accent);background:var(--soft);color:var(--text)}
 .inventory-category-tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.assignments-page-head{justify-content:flex-end}
+.assignments-page-head{justify-content:space-between}
+.assignment-shell{width:calc(100% - 72px);max-width:none;min-width:0;margin:0 0 0 72px;padding-right:28px;padding-left:28px}
 .history-search{margin-top:0}
 .history-search-status{margin:-5px 0 10px;color:var(--muted);font-size:11px}
 .history-row[hidden]{display:none}
@@ -274,6 +275,7 @@
 }
 @media(max-width:600px){.batch-record-card{align-items:flex-start;flex-direction:column}.receiving-record{padding:16px}.receiving-record-header,.receiving-record-footer{flex-direction:column}.receiving-record-reference{text-align:left}.receiving-record-footer p{max-width:none}.receiving-record-signatures{grid-template-columns:1fr;gap:38px}}
 .overview-heading{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 16px}
+.overview-shell{width:calc(100% - 72px);max-width:none;min-width:0;margin:0 0 0 72px;padding-right:28px;padding-left:28px}
 .overview-heading h1{margin:0;font-size:25px}
 .overview-heading .button{padding:7px 11px}
 .overview-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin-bottom:12px}
@@ -321,6 +323,13 @@
 .movement-form label{font-size:9px}
 .movement-form input{padding:6px 7px;font-size:10px}
 .movement-form button{font-size:10px}
+.assignment-form-head .form-actions{flex-wrap:wrap}
+.assignment-form-card{width:100%;max-width:760px}
+.assignments-table-card{width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch}
+.assignment-table{width:100%;min-width:1050px;table-layout:auto}
+.assignment-table th,.assignment-table td{overflow-wrap:anywhere}
+.assignment-table th{white-space:nowrap}
+.assignment-table .assignment-actions{min-width:210px}
 .low-stock-tag{display:flex;width:max-content;margin-top:5px;background:#fff4d9;color:var(--amber)}
 html[data-theme="night"] .overview-stat-critical{background:#291e22}
 html[data-theme="night"] .low-stock-status,html[data-theme="night"] .expiry-badge.warning,html[data-theme="night"] .expiry-badge.upcoming{background:#40351d;color:#f3cb72}
@@ -333,6 +342,8 @@ html[data-theme="night"] .inventory-entry-form form[data-chemical-type-locked="t
 html[data-theme="night"] .inventory-entry-form form[data-chemical-type-locked="true"] [data-chemical-type-required] textarea{background:#2a2e36;color:#9da4b0}
 @media(max-width:1000px){.overview-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.overview-grid{grid-template-columns:1fr}}
 @media(max-width:900px){
+  .assignment-shell{width:100%;max-width:none;margin:0;padding:20px 12px 40px}
+  .overview-shell{width:100%;max-width:none;margin:0;padding:20px 12px 40px}
   .inventory-list-shell{width:100%;max-width:none;margin:0;padding:20px 12px 40px}
   .inventory-table-card{width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
   .inventory-table{min-width:900px}
@@ -342,6 +353,61 @@ html[data-theme="night"] .inventory-entry-form form[data-chemical-type-locked="t
   .purchase-details dl{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(max-width:640px){
+  .assignment-shell{padding:16px 10px 32px}
+  .overview-shell{padding:16px 10px 32px}
+  .assignments-page-head,.assignment-form-head{align-items:flex-start;flex-direction:column;gap:12px}
+  .assignment-form-head .form-actions{width:100%;gap:8px}
+  .assignment-form-head .form-actions .button{flex:1}
+  .assignment-form-card{max-width:none;padding:16px}
+  .assignment-form-card select,.assignment-form-card input,.assignment-form-card textarea{min-width:0}
+  .assignments-table-card{overflow:visible}
+  .assignment-table{display:block;width:100%;min-width:0;border-collapse:separate;border-spacing:0 10px}
+  .assignment-table thead{display:none}
+  .assignment-table tbody{display:grid;gap:10px}
+  .assignment-table tbody tr{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    width:100%;
+    overflow:hidden;
+    border:1px solid var(--line);
+    border-radius:10px;
+    background:var(--panel);
+  }
+  .assignment-table tbody td{
+    display:block;
+    min-width:0;
+    padding:10px 12px;
+    border-right:1px solid var(--line);
+    border-bottom:1px solid var(--line);
+    overflow-wrap:anywhere;
+    vertical-align:top;
+  }
+  .assignment-table tbody td:nth-child(even){border-right:0}
+  .assignment-table tbody td[data-label]::before{
+    display:block;
+    margin-bottom:4px;
+    color:#9297a0;
+    content:attr(data-label);
+    font-size:8px;
+    font-weight:800;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+  .assignment-table tbody td[data-label="Item"],
+  .assignment-table tbody td[data-label="Employee"],
+  .assignment-table tbody td[data-label="Remarks"],
+  .assignment-table tbody td[data-label="Actions"],
+  .assignment-table tbody td.empty{grid-column:1/-1}
+  .assignment-table tbody td[data-label="Employee"],
+  .assignment-table tbody td[data-label="Remarks"],
+  .assignment-table tbody td[data-label="Actions"],
+  .assignment-table tbody td.empty{border-right:0}
+  .assignment-table tbody td[data-label="Actions"]{border-bottom:0}
+  .assignment-table .assignment-actions{min-width:0}
+  .assignment-table .movement-form{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .assignment-table .movement-form label{min-width:0}
+  .assignment-table .movement-form button{grid-column:1/-1;width:100%;padding:8px}
+  .assignment-table .movement-form input{min-width:0}
   .inventory-list-shell{padding:16px 10px 32px}
   .inventory-page-head{gap:10px}
   .toolbar{display:grid;grid-template-columns:minmax(0,1fr) auto}

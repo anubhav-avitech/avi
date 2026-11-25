@@ -14,6 +14,7 @@ const UNIT_ALIASES = {
 
 const LIQUID_UNITS = new Set(['L', 'ml']);
 const POWDER_UNITS = new Set(['kg', 'g', 'mg']);
+const MASS_CHEMICAL_TYPES = new Set(['POWDER', 'PALLETS', 'GRANULES']);
 
 function normalizeUnit(unit) {
   return UNIT_ALIASES[String(unit || '').trim()] || null;
@@ -22,7 +23,7 @@ function normalizeUnit(unit) {
 function allowedUnitsFor(form) {
   return form === 'LIQUID'
     ? ['L', 'ml']
-    : form === 'POWDER'
+    : MASS_CHEMICAL_TYPES.has(form)
       ? ['kg', 'g', 'mg']
       : [];
 }
@@ -61,7 +62,7 @@ function normalizeQuantity(value) {
 function chemicalDetails(data, chemicalName, existingPackageUnit) {
   const form = String(data.chemical_form || '').toUpperCase();
   if (!form) return null;
-  if (!['LIQUID', 'POWDER'].includes(form)) throw new Error('INVALID_CHEMICAL');
+  if (!['LIQUID', ...MASS_CHEMICAL_TYPES].includes(form)) throw new Error('INVALID_CHEMICAL');
 
   const packageUnit = String(data.packaging_type || data.unit || '').trim();
   const validPackageUnits = [
@@ -303,7 +304,7 @@ async function list(user, search) {
     if (form === 'LIQUID') {
       group.quantity = Number((group.aggregate_base / 1000).toFixed(3));
       group.unit = 'L';
-    } else if (form === 'POWDER') {
+    } else if (MASS_CHEMICAL_TYPES.has(form)) {
       if (group.aggregate_base >= 1000000) {
         group.quantity = Number((group.aggregate_base / 1000000).toFixed(3));
         group.unit = 'KG';

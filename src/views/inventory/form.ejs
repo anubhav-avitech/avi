@@ -64,6 +64,8 @@
           <option value=""><%= item?'Not a chemical':'Select type' %></option>
           <option value="LIQUID" <%= item?.chemical_form==='LIQUID'?'selected':'' %>>Liquid</option>
           <option value="POWDER" <%= item?.chemical_form==='POWDER'?'selected':'' %>>Powder</option>
+          <option value="PALLETS" <%= item?.chemical_form==='PALLETS'?'selected':'' %>>Pallets</option>
+          <option value="GRANULES" <%= item?.chemical_form==='GRANULES'?'selected':'' %>>Granules</option>
         </select>
         <% if(item?.chemical_form){ %><input type="hidden" name="chemical_form" value="<%= item.chemical_form %>"><% } %>
       </label>

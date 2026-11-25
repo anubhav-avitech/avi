@@ -94,7 +94,7 @@ CREATE TABLE inventory_products (
 CREATE TABLE chemical_master (
   id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   name VARCHAR(150) NOT NULL UNIQUE,
-  chemical_type ENUM('LIQUID','POWDER') NULL,
+  chemical_type ENUM('LIQUID','POWDER','PALLETS','GRANULES') NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) ENGINE=InnoDB;
@@ -180,7 +180,7 @@ CREATE TABLE inventory_items (
   calibration_required TINYINT(1) NULL,
   calibration_frequency VARCHAR(100) NULL,
   warranty_applicable TINYINT(1) NULL,
-  chemical_form ENUM('LIQUID','POWDER') NULL,
+  chemical_form ENUM('LIQUID','POWDER','PALLETS','GRANULES') NULL,
   container_capacity DECIMAL(12,3) NULL,
   container_unit ENUM('L','ml','kg','g','mg') NULL,
   package_count DECIMAL(12,3) NULL,
@@ -241,7 +241,7 @@ CREATE TABLE inventory_assignments (
   remarks VARCHAR(500) NULL,
   quantity DECIMAL(12,3) NOT NULL,
   unit VARCHAR(30) NOT NULL,
-  chemical_form ENUM('LIQUID','POWDER') NULL,
+  chemical_form ENUM('LIQUID','POWDER','PALLETS','GRANULES') NULL,
   batch_number VARCHAR(100) NULL,
   expiry_date DATE NULL,
   container_capacity DECIMAL(12,3) NULL,

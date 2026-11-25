@@ -8,7 +8,7 @@
     <script src="/theme.js?v=1"></script>
     <!-- Application stylesheets -->
     <link rel="stylesheet" href="/styles.css?v=19">
-    <link rel="stylesheet" href="/inventory.css?v=45">
+    <link rel="stylesheet" href="/inventory.css?v=48">
     <link rel="stylesheet" href="/masters.css?v=2">
     <link rel="stylesheet" href="/theme.css?v=9">
 </head>
@@ -17,7 +17,7 @@
         <!-- Main layout for logged-in users -->
         <div class="app-layout">
             <%- include('partials/nav') %>
-            <main class="shell<%= path.startsWith('/users') ? ' team-shell' : path.startsWith('/master/') ? ' master-shell' : (path === '/inventory' || /^\/inventory\/batches/.test(path)) ? ' inventory-list-shell' : (path === '/inventory/new' || /^\/inventory\/\d+\/edit$/.test(path)) ? ' inventory-form-shell' : '' %>">
+            <main class="shell<%= path.startsWith('/users') ? ' team-shell' : path.startsWith('/master/') ? ' master-shell' : (path === '/inventory' || /^\/inventory\/batches/.test(path)) ? ' inventory-list-shell' : (path === '/inventory/new' || /^\/inventory\/\d+\/edit$/.test(path)) ? ' inventory-form-shell' : path.startsWith('/assignments') ? ' assignment-shell' : path === '/' ? ' overview-shell' : '' %>">
     <% } else { %>
         <!-- Layout for login and other public pages -->
         <%- include('partials/theme-toggle', { themeToggleClass: 'auth-theme-toggle' }) %>

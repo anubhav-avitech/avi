@@ -14,7 +14,9 @@ const masters = {
       { name: 'name', label: 'Chemical name', required: true, maxLength: 150 },
       { name: 'chemical_type', label: 'Chemical type', required: true, type: 'select', options: [
         { value: 'LIQUID', label: 'Liquid' },
-        { value: 'POWDER', label: 'Powder' }
+        { value: 'POWDER', label: 'Powder' },
+        { value: 'PALLETS', label: 'Pallets' },
+        { value: 'GRANULES', label: 'Granules' }
       ] }
     ]
   },

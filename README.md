@@ -193,5 +193,14 @@ Duplicate legacy chemical/batch rows are preserved; their batch keys remain
 unset while the database prevents future duplicate keys. Do not rerun this
 migration; its quantity conversion is intended to run once.
 
+To add the Pallets and Granules chemical types on an existing installation, run:
+
+```bash
+mysql -u root -p < database/migrate-chemical-types-pallets-granules.sql
+```
+
+Pallets and Granules use mass units (MG, G, KG), like Powder. Liquid continues
+to use only ML and L.
+
 Do not run `database/schema.sql` on an existing database whose data must be
 preserved; it drops and recreates the application tables.
