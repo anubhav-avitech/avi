@@ -7,16 +7,15 @@
 </form>
 <section class="card inventory-table-card">
   <table class="inventory-table">
-    <thead><tr><th>Item</th><th>Type</th><th>Stock balance</th><th>Batches</th><th>Status</th><th></th></tr></thead>
+    <thead><tr><th>Item</th><th>Type</th><th>Stock balance</th><th></th></tr></thead>
     <tbody>
-      <% if(!items.length){ %><tr><td colspan="6" class="empty">No inventory found.</td></tr><% } %>
+      <% if(!items.length){ %><tr><td colspan="4" class="empty">No inventory found.</td></tr><% } %>
       <% items.forEach(i=>{ %>
         <% const today=new Date(); today.setHours(0,0,0,0); const daysToExpiry=i.expiry_date?Math.ceil((new Date(`${i.expiry_date}T00:00:00`)-today)/86400000):null; %>
         <tr>
           <td class="inventory-item" data-label="Item">
             <strong><%= i.name %></strong>
             <div class="item-subdetails">
-              <span class="item-reference"><%= i.asset_code %></span>
               <% if(i.serial_number){ %><span>Serial: <%= i.serial_number %></span><% } %>
             </div>
             <% if(i.glassware_master_id){ %>
@@ -46,32 +45,24 @@
             <% if(i.chemical_form){ %>
               <div class="chemical-summary">
                 <span><%= i.chemical_form.toLowerCase() %></span>
-                <span>Batch <%= i.batch_number || '—' %></span>
-                <span>Expires <%= i.expiry_date || '—' %></span>
+                <button type="button" class="chemical-batches-trigger" data-chemical-id="<%= i.chemical_id %>" data-chemical-name="<%= i.name %>">
+                  View <%= i.batch_count %> batch<%= Number(i.batch_count)===1?'':'es' %>
+                </button>
               </div>
-              <details class="purchase-details">
-                <summary>Purchase details</summary>
-                <dl>
-                  <div><dt>Vendor</dt><dd><%= i.vendor_name || '—' %></dd></div>
-                  <div><dt>Bill no.</dt><dd><%= i.vendor_bill_no || '—' %></dd></div>
-                  <div><dt>Make / grade</dt><dd><%= i.make_grade || '—' %></dd></div>
-                  <div><dt>Mfg. date</dt><dd><%= i.manufacturer || '—' %></dd></div>
-                  <div><dt>Received</dt><dd><%= i.received_date || '—' %></dd></div>
-                  <div><dt>Received by</dt><dd><%= i.received_by || '—' %></dd></div>
-                </dl>
-              </details>
             <% } %>
             <% if(Number(i.minimum_stock)>0&&Number(i.product_available_quantity)<=Number(i.minimum_stock)){ %><span class="tag low-stock-tag">LOW STOCK · product available <%= i.product_available_quantity %> <%= i.unit %></span><% } %>
             <% if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<0){ %><span class="tag">EXPIRED</span><% }else if(i.chemical_form&&daysToExpiry!==null&&daysToExpiry<=30){ %><span class="tag"><%= daysToExpiry===0?'EXPIRES TODAY':`EXPIRING IN ${daysToExpiry} DAYS` %></span><% } %>
           </td>
           <td data-label="Type"><span class="tag"><%= i.chemical_form?'CHEMICAL':i.glassware_master_id?'GLASSWARE':i.equipment_master_id?'EQUIPMENT':i.item_type %></span></td>
           <td data-label="Stock balance">
-            <strong><%= i.quantity %> <%= i.unit %></strong>
-            <small>Minimum: <%= i.minimum_stock %> <%= i.unit %></small>
-            <% if(i.chemical_form){ %><small><%= i.container_capacity %> <%= i.container_unit %> each · total left <%= Number(i.quantity*i.container_capacity).toLocaleString() %> <%= i.container_unit %></small><% } %>
+            <% if(i.chemical_form&&i.package_breakdown&&i.package_breakdown.length){ %>
+              <strong><%= i.package_type_summary.map(pack=>`${Number(pack.package_count).toLocaleString()} ${Number(pack.package_count)===1?pack.packaging_singular_label:pack.packaging_label}`).join(' · ') %></strong>
+              <small><%= i.has_uniform_package_size?`${Number(i.common_package_capacity).toLocaleString()} ${i.common_package_unit} each`:'view batches for details' %></small>
+              <small><%= Number(i.total_stock_quantity).toLocaleString() %> <%= i.total_stock_unit %> total</small>
+            <% }else{ %>
+              <strong><%= i.quantity %> <%= i.unit %></strong>
+            <% } %>
           </td>
-          <td data-label="Batches"><%= i.batch_count || '—' %></td>
-          <td data-label="Status"><span class="status <%= i.status.toLowerCase() %>"><%= i.status %></span></td>
           <td class="actions" data-label="Actions">
             <% if(user.role_name==='Administrator'&&user.permissions.includes('AUDIT_VIEW')){ %><a href="/inventory/<%= i.id %>/history">History</a><% } %>
             <% if(user.permissions.includes('INVENTORY_CREATE')&&i.status!=='RETIRED'){ %><a href="/inventory/<%= i.id %>/restock">Add stock</a><% } %>
@@ -85,6 +76,22 @@
     </tbody>
   </table>
 </section>
+<dialog class="chemical-batches-dialog" id="chemical_batches_dialog" aria-labelledby="chemical_batches_title">
+  <div class="chemical-batches-panel">
+    <header class="chemical-batches-header">
+      <div class="chemical-batches-header-row">
+        <div><div class="eyebrow">CHEMICAL INVENTORY</div><h2 id="chemical_batches_title">Batches</h2></div>
+        <button type="button" class="secondary chemical-batches-close" aria-label="Close batch details">Close</button>
+      </div>
+      <div class="chemical-batches-search" id="chemical_batches_search_wrap" hidden>
+        <input type="search" id="chemical_batches_search" aria-label="Search batch details" placeholder="Search batches, expiry, vendor..." autocomplete="off">
+      </div>
+    </header>
+    <div id="chemical_batches_content" class="chemical-batches-content" aria-live="polite">
+      <p class="muted">Select a chemical to view its batches.</p>
+    </div>
+  </div>
+</dialog>
 <dialog class="retire-dialog" id="retire_dialog" aria-labelledby="retire_dialog_title">
   <form method="dialog">
     <div class="eyebrow">CONFIRM RETIREMENT</div>
@@ -137,5 +144,242 @@
     retireDialog.close();
     confirmedRetirement = true;
     form.requestSubmit();
+  });
+</script>
+<script>
+  const batchesDialog = document.getElementById('chemical_batches_dialog');
+  const batchesTitle = document.getElementById('chemical_batches_title');
+  const batchesContent = document.getElementById('chemical_batches_content');
+  const batchesSearchWrap = document.getElementById('chemical_batches_search_wrap');
+  const batchesSearch = document.getElementById('chemical_batches_search');
+  let batchList = null;
+  let noBatchMatches = null;
+
+  function formatBatchNumber(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    const number = Number(value);
+    return Number.isFinite(number)
+      ? number.toLocaleString(undefined, { maximumFractionDigits: 3 })
+      : String(value);
+  }
+
+  function formatBatchDate(value) {
+    if (!value) return '—';
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return String(value);
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const date = new Date(year, month - 1, day);
+    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
+      return String(value);
+    }
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+  }
+
+  function getExpiryStatus(value) {
+    const match = value && String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return null;
+    const year = Number(match[1]);
+    const month = Number(match[2]);
+    const day = Number(match[3]);
+    const expiryTime = Date.UTC(year, month - 1, day);
+    const expiryDate = new Date(expiryTime);
+    if (
+      expiryDate.getUTCFullYear() !== year ||
+      expiryDate.getUTCMonth() !== month - 1 ||
+      expiryDate.getUTCDate() !== day
+    ) return null;
+
+    const today = new Date();
+    const todayTime = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+    const daysUntilExpiry = Math.floor((expiryTime - todayTime) / 86400000);
+    if (daysUntilExpiry < 0) return { label: 'Expired', className: 'is-expired' };
+    if (daysUntilExpiry <= 30) return { label: 'Expiring Soon', className: 'is-expiring' };
+    return { label: 'Active', className: 'is-active' };
+  }
+
+  function formatPackaging(count, type, capacity, unit) {
+    const packageCount = formatBatchNumber(count);
+    const packageType = String(type || 'Packages').trim();
+    const packageLabel = Number(count) === 1
+      ? packageType.replace(/s$/i, '')
+      : (/s$/i.test(packageType) ? packageType : `${packageType}s`);
+    const size = capacity === null || capacity === undefined || capacity === ''
+      ? '—'
+      : formatBatchNumber(capacity);
+    return `${packageCount} ${packageLabel} × ${size}${unit ? ` ${unit}` : ''}`;
+  }
+
+  function appendBatchField(list, label, value) {
+    const row = document.createElement('div');
+    const term = document.createElement('dt');
+    const description = document.createElement('dd');
+    term.textContent = label;
+    description.textContent = value === null || value === undefined || value === '' ? '—' : String(value);
+    row.append(term, description);
+    list.append(row);
+  }
+
+  function appendBatchStat(container, label, value, className) {
+    const stat = document.createElement('div');
+    stat.className = `chemical-batch-stat ${className}`;
+    const caption = document.createElement('span');
+    const amount = document.createElement('strong');
+    caption.textContent = label;
+    amount.textContent = value;
+    stat.append(caption, amount);
+    container.append(stat);
+  }
+
+  function renderChemicalBatches(data) {
+    batchesContent.replaceChildren();
+    batchesSearchWrap.hidden = true;
+    batchesSearch.value = '';
+    batchList = null;
+    noBatchMatches = null;
+    if (!data.batches.length) {
+      const empty = document.createElement('p');
+      empty.className = 'muted';
+      empty.textContent = 'No batches recorded for this chemical.';
+      batchesContent.append(empty);
+      return;
+    }
+    batchList = document.createElement('div');
+    batchList.className = 'chemical-batch-list';
+    noBatchMatches = document.createElement('p');
+    noBatchMatches.className = 'muted chemical-batches-no-results';
+    noBatchMatches.setAttribute('role', 'status');
+    noBatchMatches.textContent = 'No batches match your search.';
+    noBatchMatches.hidden = true;
+    data.batches.forEach(batch => {
+      const card = document.createElement('article');
+      card.className = 'chemical-batch-card';
+
+      const batchHeading = document.createElement('div');
+      batchHeading.className = 'chemical-batch-heading';
+      const heading = document.createElement('h3');
+      heading.textContent = batch.batch_number ? `Batch ${batch.batch_number}` : 'Batch';
+      batchHeading.append(heading);
+
+      const expiryStatus = getExpiryStatus(batch.expiry_date);
+      if (expiryStatus) {
+        const badge = document.createElement('span');
+        badge.className = `chemical-expiry-badge ${expiryStatus.className}`;
+        badge.textContent = expiryStatus.label;
+        batchHeading.append(badge);
+      }
+      card.append(batchHeading);
+
+      const stock = document.createElement('div');
+      stock.className = 'chemical-batch-stock';
+      appendBatchStat(
+        stock,
+        'Available quantity',
+        `${formatBatchNumber(batch.quantity)} ${batch.unit || ''}`.trim(),
+        'is-available'
+      );
+      appendBatchStat(
+        stock,
+        'Assigned quantity',
+        `${formatBatchNumber(batch.assigned_quantity || 0)} ${batch.container_unit || batch.unit || ''}`.trim(),
+        'is-assigned'
+      );
+      card.append(stock);
+
+      const details = document.createElement('dl');
+      details.className = 'chemical-batch-info';
+      appendBatchField(
+        details,
+        'Packaging',
+        formatPackaging(batch.package_count, batch.packaging_type, batch.container_capacity, batch.container_unit)
+      );
+      appendBatchField(details, 'Expiry date', formatBatchDate(batch.expiry_date));
+      appendBatchField(details, 'Manufacturing date', formatBatchDate(batch.manufacturer));
+      if (batch.batch_number) appendBatchField(details, 'Batch number', batch.batch_number);
+      card.append(details);
+
+      const purchase = document.createElement('details');
+      purchase.className = 'chemical-purchase-details';
+      const purchaseSummary = document.createElement('summary');
+      const purchaseTitle = document.createElement('strong');
+      const receiptCount = document.createElement('span');
+      purchaseTitle.textContent = 'Purchase details';
+      receiptCount.textContent = `${batch.receipts.length} ${batch.receipts.length === 1 ? 'receipt' : 'receipts'}`;
+      purchaseSummary.append(purchaseTitle, receiptCount);
+      purchase.append(purchaseSummary);
+
+      batch.receipts.forEach((receipt, index) => {
+        const receiptSection = document.createElement('section');
+        receiptSection.className = 'chemical-receipt-entry';
+        if (batch.receipts.length > 1) {
+          const receiptHeading = document.createElement('h4');
+          receiptHeading.textContent = `Receipt ${index + 1}`;
+          receiptSection.append(receiptHeading);
+        }
+        const receiptDetails = document.createElement('dl');
+        appendBatchField(receiptDetails, 'Vendor', receipt.vendor_name);
+        appendBatchField(receiptDetails, 'Bill number', receipt.vendor_bill_no);
+        const receivedQuantity = receipt.package_count && receipt.package_capacity
+          ? formatPackaging(receipt.package_count, receipt.packaging_type, receipt.package_capacity, receipt.measurement_unit)
+          : `${formatBatchNumber(receipt.received_quantity)} ${receipt.measurement_unit || ''}`.trim();
+        appendBatchField(receiptDetails, 'Quantity received', receivedQuantity);
+        appendBatchField(receiptDetails, 'Received by', receipt.received_by);
+        appendBatchField(receiptDetails, 'Received date', formatBatchDate(receipt.receipt_date || receipt.created_at));
+        appendBatchField(receiptDetails, 'Make / grade', batch.make_grade);
+        receiptSection.append(receiptDetails);
+        purchase.append(receiptSection);
+      });
+      card.append(purchase);
+      card.dataset.search = card.textContent.toLocaleLowerCase();
+      batchList.append(card);
+    });
+    batchesSearchWrap.hidden = false;
+    batchesContent.append(batchList, noBatchMatches);
+  }
+
+  function filterChemicalBatches() {
+    if (!batchList || !noBatchMatches) return;
+    const query = batchesSearch.value.trim().toLocaleLowerCase();
+    let visibleCount = 0;
+    batchList.querySelectorAll('.chemical-batch-card').forEach(card => {
+      const matches = !query || card.dataset.search.includes(query);
+      card.hidden = !matches;
+      if (matches) visibleCount += 1;
+    });
+    noBatchMatches.hidden = visibleCount > 0;
+  }
+
+  batchesSearch.addEventListener('input', filterChemicalBatches);
+  document.querySelectorAll('.chemical-batches-trigger').forEach(button => {
+    button.addEventListener('click', async () => {
+      batchesTitle.textContent = `${button.dataset.chemicalName} batches`;
+      batchesSearchWrap.hidden = true;
+      batchesSearch.value = '';
+      batchList = null;
+      noBatchMatches = null;
+      batchesContent.replaceChildren();
+      const loading = document.createElement('p');
+      loading.className = 'muted';
+      loading.textContent = 'Loading batch details…';
+      batchesContent.append(loading);
+      batchesDialog.showModal();
+      try {
+        const response = await fetch(`/inventory/chemicals/${encodeURIComponent(button.dataset.chemicalId)}/batches`);
+        if (!response.ok) throw new Error('Batch details could not be loaded.');
+        renderChemicalBatches(await response.json());
+      } catch (error) {
+        batchesContent.replaceChildren();
+        const message = document.createElement('p');
+        message.className = 'flash error';
+        message.setAttribute('role', 'alert');
+        message.textContent = error.message || 'Batch details could not be loaded.';
+        batchesContent.append(message);
+      }
+    });
+  });
+  document.querySelector('.chemical-batches-close').addEventListener('click', () => batchesDialog.close());
+  batchesDialog.addEventListener('click', event => {
+    if (event.target === batchesDialog) batchesDialog.close();
   });
 </script>

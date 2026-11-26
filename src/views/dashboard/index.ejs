@@ -78,7 +78,7 @@
               <strong><%= product.name %></strong>
               <small><%= product.item_type %></small>
             </span>
-            <span class="overview-row-value"><strong><%= Number(product.available_quantity).toLocaleString() %> <%= product.unit %></strong><small>of <%= Number(product.minimum_stock).toLocaleString() %> <%= product.unit %></small></span>
+            <span class="overview-row-value"><strong><%= Number(product.available_quantity).toLocaleString() %> <%= product.unit %></strong></span>
             <span class="overview-pill low-stock-status">LOW</span>
           </a>
         <% }) %>

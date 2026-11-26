@@ -51,6 +51,11 @@ function formatBaseQuantity(base, form) {
   return `${Number(base.toFixed(3)).toLocaleString()} MG`;
 }
 
+function pluralPackagingType(packagingType) {
+  const label = String(packagingType || 'package').toLowerCase();
+  return label === 'box' ? 'boxes' : `${label}s`;
+}
+
 function normalizeQuantity(value) {
   const quantity = Number(value);
   if (!Number.isFinite(quantity) || quantity <= 0 || quantity > MAX_QUANTITY) {
@@ -285,11 +290,34 @@ async function list(user, search) {
       continue;
     }
     if (!chemicalGroups.has(row.chemical_id)) {
-      const copy = { ...row, batch_count: 0, aggregate_base: 0 };
+      const copy = {
+        ...row,
+        batch_count: 0,
+        aggregate_base: 0,
+        package_breakdown_by_key: new Map()
+      };
       chemicalGroups.set(row.chemical_id, copy);
     }
     const group = chemicalGroups.get(row.chemical_id);
     group.batch_count += 1;
+    const packageCount = Number(row.package_count || 0);
+    if (packageCount > 0 && row.packaging_type) {
+      const packageKey = JSON.stringify([
+        row.packaging_type,
+        row.container_capacity,
+        row.container_unit
+      ]);
+      if (!group.package_breakdown_by_key.has(packageKey)) {
+        group.package_breakdown_by_key.set(packageKey, {
+          package_count: 0,
+          packaging_singular_label: String(row.packaging_type).toLowerCase(),
+          packaging_label: pluralPackagingType(row.packaging_type),
+          container_capacity: row.container_capacity,
+          container_unit: row.container_unit
+        });
+      }
+      group.package_breakdown_by_key.get(packageKey).package_count += packageCount;
+    }
     const batchAvailable = Number(row.quantity);
     try {
       const batchUnit = row.chemical_form === 'LIQUID'
@@ -317,6 +345,35 @@ async function list(user, search) {
       }
     }
     group.name = group.chemical_master_name || group.name;
+    group.package_breakdown = [...group.package_breakdown_by_key.values()];
+    delete group.package_breakdown_by_key;
+    const packageTypes = new Map();
+    const packageSizes = new Map();
+    let allPackagesHaveSize = group.package_breakdown.length > 0;
+    for (const pack of group.package_breakdown) {
+      const currentType = packageTypes.get(pack.packaging_label) || {
+        package_count: 0,
+        packaging_singular_label: pack.packaging_singular_label,
+        packaging_label: pack.packaging_label
+      };
+      currentType.package_count += pack.package_count;
+      packageTypes.set(pack.packaging_label, currentType);
+
+      if (!pack.container_capacity || !pack.container_unit) {
+        allPackagesHaveSize = false;
+        continue;
+      }
+      packageSizes.set(JSON.stringify([pack.container_capacity, pack.container_unit]), pack);
+    }
+    group.package_type_summary = [...packageTypes.values()];
+    group.has_uniform_package_size = allPackagesHaveSize && packageSizes.size === 1;
+    if (group.has_uniform_package_size) {
+      const [commonPackage] = packageSizes.values();
+      group.common_package_capacity = commonPackage.container_capacity;
+      group.common_package_unit = commonPackage.container_unit;
+    }
+    group.total_stock_quantity = Number(group.aggregate_base.toFixed(3));
+    group.total_stock_unit = form === 'LIQUID' ? 'ml' : 'mg';
     result.push(group);
   }
   return result;
@@ -337,6 +394,78 @@ async function get(id) {
     WHERE i.id=?
   `, [id]);
   return rows[0] || null;
+}
+
+async function chemicalBatches(rawChemicalId) {
+  const rawId = String(rawChemicalId || '');
+  if (!/^[1-9]\d*$/.test(rawId) || !Number.isSafeInteger(Number(rawId))) {
+    throw new Error('NOT_FOUND');
+  }
+  const chemicalId = Number(rawId);
+  const [chemicals] = await db.query(
+    'SELECT id,name,chemical_type FROM chemical_master WHERE id=?',
+    [chemicalId]
+  );
+  if (!chemicals.length) throw new Error('NOT_FOUND');
+
+  const [batches] = await db.query(`
+    SELECT i.id,i.asset_code,i.batch_number,i.packaging_type,i.package_count,
+           i.container_capacity,i.container_unit,i.quantity,i.unit,i.status,
+           i.expiry_date,i.received_date,i.manufacturer,i.location,
+           COALESCE(v.name,i.vendor_name) AS vendor_name,i.vendor_bill_no,
+           i.make_grade,i.received_by,
+           COALESCE(movements.assigned_quantity,0) AS assigned_quantity
+    FROM inventory_items i
+    LEFT JOIN vendor_master v ON v.id=i.vendor_id
+    LEFT JOIN (
+      SELECT inventory_id,SUM(CASE
+        WHEN action='ASSIGN' THEN quantity
+        WHEN action IN ('CONSUME','RETURN') THEN -quantity
+        ELSE 0
+      END) AS assigned_quantity
+      FROM inventory_transactions
+      WHERE assignment_id IS NOT NULL
+      GROUP BY inventory_id
+    ) movements ON movements.inventory_id=i.id
+    WHERE i.chemical_id=? AND i.chemical_form IS NOT NULL
+    ORDER BY i.expiry_date IS NULL,i.expiry_date,i.batch_number,i.id
+  `, [chemicalId]);
+  if (!batches.length) return { chemical: chemicals[0], batches: [] };
+
+  const batchIds = batches.map(batch => batch.id);
+  const placeholders = batchIds.map(() => '?').join(',');
+  const [receipts] = await db.query(`
+    SELECT r.id,r.inventory_id,r.package_count,r.package_capacity,
+           r.measurement_unit,r.received_quantity,r.packaging_type,r.receipt_date,
+           COALESCE(v.name,'') AS vendor_name,r.vendor_bill_no,r.received_by,r.created_at
+    FROM inventory_stock_receipts r
+    LEFT JOIN vendor_master v ON v.id=r.vendor_id
+    WHERE r.inventory_id IN (${placeholders})
+    ORDER BY r.receipt_date,r.id
+  `, batchIds);
+  const receiptsByBatch = new Map();
+  for (const receipt of receipts) {
+    if (!receiptsByBatch.has(receipt.inventory_id)) receiptsByBatch.set(receipt.inventory_id, []);
+    receiptsByBatch.get(receipt.inventory_id).push(receipt);
+  }
+
+  return {
+    chemical: chemicals[0],
+    batches: batches.map(batch => ({
+      ...batch,
+      receipts: receiptsByBatch.get(batch.id) || [{
+        package_count: batch.package_count || batch.quantity,
+        package_capacity: batch.container_capacity,
+        measurement_unit: batch.container_unit,
+        received_quantity: Number(batch.package_count || batch.quantity) * Number(batch.container_capacity || 0),
+        packaging_type: batch.packaging_type || batch.unit,
+        receipt_date: batch.received_date,
+        vendor_name: batch.vendor_name,
+        vendor_bill_no: batch.vendor_bill_no,
+        received_by: batch.received_by
+      }]
+    }))
+  };
 }
 
 async function batchReceivingRecords() {
@@ -1190,6 +1319,7 @@ async function transactionsForItem(user, inventoryId) {
 module.exports = {
   list,
   get,
+  chemicalBatches,
   batchReceivingRecords,
   batchReceivingRecord,
   create,

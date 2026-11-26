@@ -8,7 +8,7 @@
     <script src="/theme.js?v=1"></script>
     <!-- Application stylesheets -->
     <link rel="stylesheet" href="/styles.css?v=19">
-    <link rel="stylesheet" href="/inventory.css?v=48">
+    <link rel="stylesheet" href="/inventory.css?v=49">
     <link rel="stylesheet" href="/masters.css?v=2">
     <link rel="stylesheet" href="/theme.css?v=9">
 </head>
@@ -26,7 +26,7 @@
 
         <!-- Display flash messages except on user management pages -->
         <% if (flash && !flash.toast && !path.startsWith('/users')) { %>
-            <div class="flash <%= flash.type %>"></div>
+            <div class="flash <%= flash.type %>" role="<%= flash.type === 'error' ? 'alert' : 'status' %>"><%= flash.msg %></div>
         <% } %>
 
         <!-- Render the current page content -->

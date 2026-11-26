@@ -252,6 +252,17 @@ router.get('/inventory/batches/receiving-record', requireAuth, requirePermission
   }
 });
 
+router.get('/inventory/chemicals/:id/batches', requireAuth, requirePermission('INVENTORY_VIEW'), async (req, res, next) => {
+  try {
+    res.json(await inventory.chemicalBatches(req.params.id));
+  } catch (error) {
+    if (error.message === 'NOT_FOUND') {
+      return res.status(404).json({ error: 'Chemical not found.' });
+    }
+    next(error);
+  }
+});
+
 router.get('/inventory/new', requireAuth, requirePermission('INVENTORY_CREATE'), async (req, res, next) => {
   try {
     res.render('inventory/form', {
